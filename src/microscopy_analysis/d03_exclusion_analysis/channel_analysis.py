@@ -22,6 +22,38 @@ z = 0
 
 num_digits = 4
 
+# compute areas for each channel and add results to a dataframe
+def compute_areas(seg, seg_labels, df_idc, df, pixel_area):
+    regionareas = np.count_nonzero(seg, axis=(3, 4)) * pixel_area
+
+    size_c = seg.shape[1]
+    assert size_c == len(seg_labels)
+    for c in range(size_c):
+        df.loc[df_idc, f'{seg_labels[c]} area'] = regionareas[:, c, :]
+
+    return df
+
+# compute intensity for each channel (with an option to add masks) and add results to a dataframe
+def compute_int(img, ch_labels, df_idc, df, mask=None, mask_label=None):
+    if mask is not None:
+        mask = np.broadcast_to(mask, img.shape)
+        img = np.ma.masked_array(img, mask == 0)
+        mask_label = f' ({mask_label})'
+    else:
+        mask_label = ''
+
+    mean_int = np.ma.mean(img, axis=(3, 4))
+    median_int = np.ma.median(img, axis=(3, 4))
+
+    size_c = img.shape[1]
+    assert size_c == len(ch_labels)
+    for c in range(size_c):
+        df.loc[df_idc, f'mean {ch_labels[c]} int{mask_label}'] = mean_int[:, c, :].squeeze()
+        df.loc[df_idc, f'median {ch_labels[c]} int{mask_label}'] = median_int[:, c, :].squeeze()
+
+    return df
+
+
 def add_exclusion_channel(binary_regions, cell_ch, caax_ch):
     size_c = binary_regions.shape[1]
     caax_ch = check_and_convert_to_list(caax_ch, size_c)

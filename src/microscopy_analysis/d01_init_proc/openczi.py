@@ -5,8 +5,8 @@ src_path = str(Path.cwd().parent)
 if src_path not in sys.path:
     sys.path.append(src_path)
 import numpy as np
-from aicsimageio import AICSImage
-from aicsimageio.writers import OmeTiffWriter
+from bioio import BioImage
+import bioio_czi
 import xml.etree.ElementTree as ET
 import xmltodict
 from ome_types.model import Plane
@@ -56,6 +56,7 @@ def convert_czi_to_tif(imgpath, raw_tif_dirpath):
             img.set_scene(scene)
         else:
             imgsavename = f'{Path(imgpath).name.split(".")[0]}.ome.tif'
+        imgsavename = imgsavename.replace('-', '_')
 
         img_savepath = Path(raw_tif_dirpath) / imgsavename
 
@@ -78,7 +79,6 @@ def batch_convert_czi_to_tif(exp_dir):
 
     imgpaths = [path for path in CZI_dirpath.glob('*.czi')]
     imgpaths.sort()
-    imgpaths_total = len(imgpaths)
 
     raw_ometif_dirpath = proc_dir / dn.raw_ometif_dirname
     raw_ometif_dirpath.mkdir(parents=True, exist_ok=True)

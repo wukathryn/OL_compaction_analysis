@@ -21,6 +21,7 @@ parser.add_argument('-d', '--img_dirpath', required=True, help="directory contai
 def extract_ROIs(metadata, img_shape):
     roi_labels = []
     rois = []
+    roi_coords = []
 
     for roi_data in metadata.rois:
 
@@ -31,14 +32,17 @@ def extract_ROIs(metadata, img_shape):
         coords = roi_data.union[0].points.split(' ')
         for i, coord in enumerate(coords):
             coord = coord.split(',')
-            coords[i] = [int(coord[1]), int(coord[0])]
+            coords[i] = [int(coord[0]), int(coord[1])]
 
         # Convert polygon coordinates into a mask
-        roi = polygon2mask(img_shape, coords)
-
+        coords_T = [[e[1], e[0]] for e in coords]
+        roi = polygon2mask(img_shape[3:], coords_T)
         rois.append(roi.astype(int))
 
-    return rois, roi_labels
+        roi_coords.append(coords)
+
+    return rois, roi_labels, roi_coords
+
 
 # Mask basked on cell+ regions within the ROI
 def mask_img(img, roi, min_size=100000):
@@ -47,9 +51,12 @@ def mask_img(img, roi, min_size=100000):
     cell_ch = (num_ch - 2)
     roi = roi.astype(bool)
     cell = img[:, cell_ch, :, :, :].squeeze().astype(bool)
-    cellmask = (roi & cell)
+    cellmask = (roi & cell) # shape = [t, y, x]
     cellmask = remove_small_objects(cellmask, min_size=min_size, connectivity=1)
     cellmask = binary_fill_holes(cellmask)
+
+    cellmask = np.expand_dims(cellmask, axis=(1,2))
+
     cellmask_exp = np.broadcast_to(cellmask, img.shape)
     img_masked = ma.array(img, mask=~cellmask_exp)
     return img_masked, cellmask
@@ -111,7 +118,7 @@ def batch_exclusion_analysis(img_dirpath):
         img_file = AICSImage(imgpath, reader=OmeTiffReader)
         pixelarea = utils.get_pixel_area(img_file.physical_pixel_sizes)
 
-        rois, roi_labels = extract_ROIs(metadata=img_file.metadata, img_shape=img_file.shape[-2:])
+        rois, roi_labels, _ = extract_ROIs(metadata=img_file.metadata, img_shape=img_file.shape[-2:])
 
         print(f'{len(rois)} ROIs found for {imgpath.name}')
         if len(rois) > 0:
@@ -152,8 +159,6 @@ def reorganize_df(df):
     df['% exclusion'] = perc_exclusion
 
     return df
-
-
 
 if __name__ == '__main__':
 

@@ -4,36 +4,48 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def setup_fig_subplots(ydata_labels, max_cols=4):
+def setup_fig_subplots(ydata_labels, max_cols=2):
     subplot_cols = min(len(ydata_labels), max_cols)
     subplot_rows = int(np.ceil(len(ydata_labels) / subplot_cols))
-    fig, axes = plt.subplots(subplot_rows, subplot_cols, figsize=(4.5 * subplot_cols, 4.5 * subplot_rows),
+    fig, axes = plt.subplots(subplot_rows, subplot_cols, figsize=(5 * subplot_cols, 4.5 * subplot_rows),
                              constrained_layout=True)
     return fig, axes
 
 
-def plot_timepoints(df, graphs_dir, ydata_labels, splitby, display):
-    xdata_label = 'frame'
+def plot_timepoints(df, graphs_dirpath, xdata_label, ydata_labels, splitby, hue, errorbar='se', tx_line=None, display=False):
     graph_kind = 'line'
     splitby_vals = np.unique(df[splitby])
 
+    # Loop through each unique cell
     for val in splitby_vals:
         fig, axs = setup_fig_subplots(ydata_labels)
         axs_r = axs.ravel()
+
+        # Loop through data columns
         for i, ylabel in enumerate(ydata_labels):
 
             # Selects relevant data and excludes the first timepoint when the data represents a change from the previous timepoint
-            df_selection = df.loc[(df[splitby] == val) & (df[ylabel] != 0)]
-            sns.lineplot(data=df_selection, x=xdata_label, y=ylabel, hue='UID', ax=axs_r[i], legend=False)
+            df_selection = df.loc[(df[splitby] == val) & (df[ylabel] != np.nan)]
 
-        fig_title = f'{splitby} {val} over time'
-        graph_title = f'{splitby}_{val}_tp.png'
+            sns.lineplot(data=df_selection, x=xdata_label, y=ylabel, hue=hue, errorbar=errorbar, ax=axs_r[i], legend=True)
+
+            if tx_line is not None:
+                axs_r[i].axvline(x=tx_line, color='k', linewidth=0.2, linestyle='dashed')
+
+            # Sets y-limit to span 0 to the max value out of all cells
+            ymin = np.minimum(0, df[ylabel].min() * 1.2)
+            ymax = np.maximum(0, df[ylabel].max() * 1.2)
+            axs_r[i].set(ylim=(ymin, ymax))
+
+        figname = df.loc[(df[splitby] == val)].iloc[0][splitby]
+        fig_title = f'{figname} over time'
+        graph_title = f'{figname}_tps.png'
         plt.suptitle(fig_title)
 
-        graphs_path = os.path.join(graphs_dir, graph_title)
+        graphs_path = graphs_dirpath / graph_title
         plt.savefig(graphs_path)
 
-        if display==True:
+        if display == True:
             plt.show()
         plt.close()
 

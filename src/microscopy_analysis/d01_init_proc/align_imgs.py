@@ -1,20 +1,19 @@
 from pathlib import Path
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
-from aicsimageio.writers import OmeTiffWriter
+from bioio import BioImage
+import bioio_ome_tiff
+from bioio.writers import OmeTiffWriter
 import numpy as np
 from numpy.fft import fft2, ifft2
 import pandas as pd
-from src.d00_utils.utilities import crop_black_borders, construct_ome_metadata, extract_img_info, create_ch_subset
+from src.d00_utils import utilities as utils
+from src.d00_utils import dirnames as dn
 from src.d01_init_proc import vis_and_rescale
-from src.d00_utils.dirnames import proc_dirname, raw_ometif_dirname, ch_aligned_dirname
+from src.d01_init_proc import subtractbg as sb
 import argparse
 import shutil
 from datetime import datetime
 
 # Global variables
-aligned_dirname = 'aligned'
-orig_unaligned_dirname = 'orig_unaligned'
 alignment_csv_name = 'alignment_info.csv'
 error_csv_name = 'alignment_errors.csv'
 
@@ -28,6 +27,12 @@ parser.add_argument('-s', '--ch_subset', required=True, help="subset of channels
 tp_align = -1
 z_align = 0
 
+def crop_imgs_to_same_XYdims(img1, img2):
+    min_y_size = np.minimum(img1.shape[3], img2.shape[3])
+    min_x_size = np.minimum(img1.shape[4], img2.shape[4])
+    img1 = img1[:, :, :, :min_y_size, :min_x_size]
+    img2 = img2[:, :, :, :min_y_size, :min_x_size]
+    return img1, img2
 
 def preprocess_for_alignment(img1, img2, img1_ch_align, img2_ch_align):
     # rescale images
@@ -37,11 +42,10 @@ def preprocess_for_alignment(img1, img2, img1_ch_align, img2_ch_align):
                                                            scaling_fact=None, conv_to_8bit=True)
 
     # Crop images to the same dimensions
-    min_y_size = np.minimum(img1.shape[3], img2.shape[3])
-    min_x_size = np.minimum(img1.shape[4], img2.shape[4])
+    img1, img2 = crop_imgs_to_same_XYdims(img1, img2)
 
-    img1_proc = img1_proc[tp_align, img1_ch_align, z_align, :min_y_size, :min_x_size].squeeze()
-    img2_proc = img2_proc[tp_align, img2_ch_align, z_align, :min_y_size, :min_x_size].squeeze()
+    img1_proc = img1_proc[tp_align, img1_ch_align, z_align, :, :].squeeze()
+    img2_proc = img2_proc[tp_align, img2_ch_align, z_align, :, :].squeeze()
 
     return img1_proc, img2_proc
 
@@ -60,8 +64,8 @@ def get_translation_coords(img1, img2):
     return t0, t1
 
 
-def align_and_stack(img1, img2, t0, t1):
-    [img1_size_y, img1_size_x] = img1.shape[3:]
+def align_and_stack(img1, img2, t0, t1, axis=1):
+    [img1_size_y, img1_size_x] = img1.shape[-2:]
 
     pad_y_top = 0
     pad_y_bottom = 0
@@ -80,72 +84,117 @@ def align_and_stack(img1, img2, t0, t1):
     img2_padded = np.pad(img2, ((0, 0), (0, 0), (0, 0), (pad_y_top, pad_y_bottom), (pad_x_top, pad_x_bottom)))
     img2_align = img2_padded[:, :, :, np.abs(t0): (img1_size_y + np.abs(t0)), np.abs(t1):(img1_size_x + np.abs(t1))]
 
-    aligned_stack = np.concatenate((img1[-1:, :, :, :, :], img2_align[-1:, :, :, :, :]), axis=1)
-    aligned_stack = crop_black_borders(aligned_stack)
+    aligned_stack = np.concatenate((img1[:, :, :, :, :], img2_align[:, :, :, :, :]), axis=axis)
 
     return aligned_stack
 
-## NOTE: doesn't work very well yet
-def align_all_ch(imgpath, ch_aligned_dirpath=None):
-    imgpath = Path(imgpath)
+def align_timepoints(img, target_perc_grayval=30, max_translation=50, ch_to_align=0, z=0):
+    size_t = img.shape[0]
 
-    # Create output directory if not given
-    if ch_aligned_dirpath==None:
-        ch_aligned = imgpath.parent / ch_aligned_dirname
-        ch_aligned.mkdir(parents=True, exist_ok=True)
+    # get channel subset and pre-process images for getting alignment data
+    img_preprocessed = img
+    img_preprocessed = img_preprocessed[:, ch_to_align, np.newaxis, z, np.newaxis, :, :]
+    img_preprocessed = utils.crop_black_borders(img_preprocessed)
+    img_preprocessed, _ = vis_and_rescale.rescale_img(img_preprocessed, target_perc_grayval=target_perc_grayval)
 
-    # Open image
-    img_file = AICSImage(imgpath, reader=OmeTiffReader)
-    img = img_file.data
+    t = 0
+    aligned_stack = img[t, np.newaxis, :, :, :, :]
+    img1_slice = img_preprocessed[t, 0, 0:, :].squeeze()
 
-    size_c = img.shape[1]
+    prev_t0 = 0
+    prev_t1 = 0
 
-    # Set img1 as the first channel
-    img1 = img[:, 0, np.newaxis, :, :, :]
+    for t in range(1, size_t):
 
-    # align and stack the remaining channels
-    for img2_ch in range(1, size_c):
-
-        # Set img2 as the next channel
-        img2 = img[:, img2_ch, np.newaxis, :, :, :]
-
-        img1_slice, img2_slice = preprocess_for_alignment(img1, img2, img1_ch_align=0, img2_ch_align=0)
-
+        img2_slice = img_preprocessed[t, 0, 0, :, :].squeeze()
         t0, t1 = get_translation_coords(img1_slice, img2_slice)
 
-        # Stack img1 and img2 and save this stack as img1
-        img1 = align_and_stack(img1, img2, t0, t1)
+        if np.abs(t0) > max_translation:
+            t0 = prev_t0
+        if np.abs(t1) > max_translation:
+            t1 = prev_t1
 
-    ome_metadata = construct_ome_metadata(img1, img_file.physical_pixel_sizes)
-    OmeTiffWriter.save(img1, ch_aligned_dirpath / imgpath.name, ome_xml=ome_metadata)
+        print(f't0 = {t0} for t{t} (tp align)')
+        print(f't1 = {t1} for t{t} (tp align)')
 
-## NOTE: doesn't work very well yet
-def batch_align_ch(input_dir):
-    # Create output directory
-    input_dir = Path(input_dir)
-    ch_aligned_dirpath = input_dir.parent / ch_aligned_dirname
-    ch_aligned_dirpath.mkdir(parents=True, exist_ok=True)
+        img2 = img[t, np.newaxis, :, :, :, :]
+        aligned_stack = align_and_stack(aligned_stack, img2, t0, t1, axis=0)
 
-    imgpaths = [path for path in Path(input_dir).glob('*.ome.tif')]
-    imgpaths.sort()
-    num_imgs = len(imgpaths)
-    for i, imgpath in enumerate(imgpaths):
-        print(f'Aligning {i}/{num_imgs}')
-        align_all_ch(imgpath, ch_aligned_dirpath)
+        prev_t0 = t0
+        prev_t1 = t1
 
-    return ch_aligned_dirpath
+    return aligned_stack
+
+def align_all_ch(img, onfirsttp=True, target_perc_grayval=30, max_translation=50, c_ref=0, z=0):
+    (size_t, size_c) = img.shape[:2]
+
+    # rearrange img so that the reference channel is the first channel in the stack
+    ch_list = np.arange(size_c)
+    ch_list_reordered = np.concatenate(([c_ref], np.array([ch for ch in ch_list if ch != c_ref])))
+    img = img[:, ch_list_reordered, :, :, :]
+
+    img_preprocessed = img
+    img_preprocessed = utils.crop_black_borders(img_preprocessed)
+    img_preprocessed, _ = vis_and_rescale.rescale_img(img_preprocessed, target_perc_grayval=target_perc_grayval)
+
+    if onfirsttp:
+        t=0
+        c_init=0
+        aligned_stack = img[:, c_init, np.newaxis, :, :, :]
+        for c in range(1, size_c):
+            img1_preproc = img[t, c_init, :, :, :].squeeze()
+            img2_preproc = img[t, c, :, :, :].squeeze()
+            t0, t1 = get_translation_coords(img1_preproc, img2_preproc)
+            print(f't0, t1 = ({t0}, {t1}) (ch align)')
+            if np.abs(t0) > max_translation:
+                print(f'resetting t0 to 0')
+                t0 = 0
+            if np.abs(t1) > max_translation:
+                print(f'resetting t1 to 0')
+                t1 = 0
+            aligned_stack = align_and_stack(aligned_stack, img[:, c, np.newaxis, :, :, :], t0, t1, axis=1)
+    else:
+
+        for t in range(0, size_t):
+            c = 0
+            aligned_stack_t = img[t, np.newaxis, c, np.newaxis, :, :, :]
+            img1_preproc_slice = img_preprocessed[t, np.newaxis, c, np.newaxis, :, :, :]
+
+            for c in range(1, size_c):
+                img2_preproc_slice = img_preprocessed[t, np.newaxis, c, np.newaxis, :, :, :]
+                t0, t1 = get_translation_coords(img1_preproc_slice.squeeze(), img2_preproc_slice.squeeze())
+                print(f't0, t1 = ({t0}, {t1}) for t{t}, ch{c} (ch align)')
+                if np.abs(t0) > max_translation:
+                    print(f'resetting t0 to 0')
+                    t0 = 0
+                if np.abs(t1) > max_translation:
+                    print(f'resetting t1 to 0')
+                    t1 = 0
+                img2_slice = img[t, np.newaxis, c, np.newaxis, :, :, :]
+                aligned_stack_t = align_and_stack(aligned_stack_t, img2_slice, t0, t1, axis=1)
+
+            if t == 0:
+                aligned_stack = aligned_stack_t
+            else:
+                aligned_stack = np.concatenate([aligned_stack, aligned_stack_t], axis=0)
+
+    # revert channels back to original order
+    orig_ch_idc = np.nonzero(ch_list[:, None] == ch_list_reordered)[1]
+    aligned_stack = aligned_stack[:, orig_ch_idc, :, :, :]
+
+    return aligned_stack
 
 def align_2imgs(imgpath1, imgpath2, aligned_dirpath, img1_ch_align=0, img2_ch_align=0,
                 img1_ch_subset=None, img2_ch_subset=None):
 
     # Open both images and crop out black borders
-    img_file1 = AICSImage(imgpath1, reader=OmeTiffReader)
+    img_file1 = BioImage(imgpath1, reader=bioio_ome_tiff.Reader)
     img1 = img_file1.data
-    img1 = crop_black_borders(img1)
+    img1 = utils.crop_black_borders(img1)
 
-    img_file2 = AICSImage(imgpath2, reader=OmeTiffReader)
+    img_file2 = BioImage(imgpath2, reader=bioio_ome_tiff.Reader)
     img2 = img_file2.data
-    img2 = crop_black_borders(img2)
+    img2 = utils.crop_black_borders(img2)
 
     # Check if the channels in the channel subset will exist in the merged image
     img1_sizeC = img1.shape[1]
@@ -164,7 +213,7 @@ def align_2imgs(imgpath1, imgpath2, aligned_dirpath, img1_ch_align=0, img2_ch_al
     aligned_stack = align_and_stack(img1, img2, t0, t1)
 
     # Save aligned stack with all image channels
-    ome_metadata = construct_ome_metadata(aligned_stack, img_file1.physical_pixel_sizes)
+    ome_metadata = utils.construct_ome_metadata(aligned_stack, img_file1)
     aligned_pathname = f'{Path(imgpath1).name.split(".")[0]}_aligned.ome.tif'
     aligned_path = Path(aligned_dirpath) / aligned_pathname
     OmeTiffWriter.save(aligned_stack, aligned_path, ome_xml=ome_metadata)
@@ -185,8 +234,8 @@ def align_2imgs(imgpath1, imgpath2, aligned_dirpath, img1_ch_align=0, img2_ch_al
         stack_img2_ch_subset = img2_ch_subset + img1_sizeC
         stack_ch_subset = np.concatenate([img1_ch_subset, stack_img2_ch_subset])
 
-        create_ch_subset(stack_ch_subset, aligned_path,
-                         img=aligned_stack, pixelsizes=img_file1.physical_pixel_sizes, output_dir=None)
+        utils.create_ch_subset(stack_ch_subset, aligned_path,
+                         img=aligned_stack, img_file=img_file1, output_dir=None)
 
     return align_df
 
@@ -201,57 +250,59 @@ def batch_align_2imgs(aligndir, img1_ch_align=0, img2_ch_align=0, img1_ch_subset
     assert dirs[0].exists(), "dir1 does not exist, please input a valid path"
     assert dirs[1].exists(), "dir2 does not exist, please input a valid path"
 
-    dir1_raw_dirpath = Path(dirs[0]) / proc_dirname / raw_ometif_dirname
+    dir1_raw_dirpath = Path(dirs[0]) / dn.proc_dirname / dn.raw_ometif_dirname
     assert dir1_raw_dirpath.exists(), f'Please process {dirs[0].name} into raw ome-tiffs'
-    dir2_raw_dirpath = Path(dirs[1]) / proc_dirname / raw_ometif_dirname
+    dir2_raw_dirpath = Path(dirs[1]) / dn.proc_dirname / dn.raw_ometif_dirname
     assert dir2_raw_dirpath.exists(), f'Please process {dirs[1].name} into raw ome-tiffs'
 
     # Get imgnames from each of the directories to be aligned
     imgnames1 = [path.name for path in Path(dir1_raw_dirpath).glob('*.ome.tif')]
     imgnames1.sort()
+
     imgnames1_totalcount = len(imgnames1)
     imgnames2 = [path.name for path in Path(dir2_raw_dirpath).glob('*.ome.tif')]
     imgnames2.sort()
 
     multiexp_dirpath = aligndir.parent
-    aligned_dirpath = multiexp_dirpath / aligned_dirname / f'{dirs[0].name}_and_{dirs[1].name}_aligned'\
-                      / proc_dirname / raw_ometif_dirname
+    aligned_dirpath = multiexp_dirpath / dn.aligned_dirname / f'{dirs[0].name}_and_{dirs[1].name}_aligned'\
+                      / dn.proc_dirname / dn.raw_ometif_dirname
+    aligned_dirpath.mkdir(parents=True, exist_ok=True)
+
+    # Extracts the img1 directory name from the aligned file (relies on the naming convention staying the same)
+    aligned_imgnames = [(path.name[:path.name.find('_aligned')] + '.ome.tif') for path in aligned_dirpath.glob('*.ome.tif')]
 
     # Check for and exclude already aligned images
-    if aligned_dirpath.exists():
+    imgnames1 = [imgname1 for imgname1 in imgnames1 if imgname1 not in aligned_imgnames]
+    print(f'Skipping {imgnames1_totalcount - len(imgnames1)} previously aligned images')
 
-        # Extracts the img1 directory name from the aligned file (relies on the naming convention staying the same)
-        aligned_imgnames = [(path.name[:path.name.find('_aligned')] + '.ome.tif') for path in aligned_dirpath.glob('*.ome.tif')]
-        imgnames1 = [imgname1 for imgname1 in imgnames1 if imgname1 not in aligned_imgnames]
-        print(f'Skipping {imgnames1_totalcount - len(imgnames1)} previously aligned images')
-
-        # Looks for and loads any existing alignment or error csv file
-        aligned_csv_path = aligned_dirpath / alignment_csv_name
-        if aligned_csv_path.is_file():
-            align_df = pd.read_csv(aligned_csv_path)
-            # Drop any rows that are missing t0 and t1 values
-            align_df = align_df.dropna(axis=0, subset=['t0', 't1'])
-        else:
-            align_df = pd.DataFrame()
-        error_csv_path = aligned_dirpath / error_csv_name
-        if error_csv_path.is_file():
-            error_df = pd.read_csv(error_csv_path)
-        else:
-            error_df = pd.DataFrame({'image name': [], 'error time': []})
-
+    # Looks for and loads any existing alignment or error csv file
+    aligned_csv_path = aligned_dirpath / alignment_csv_name
+    if aligned_csv_path.is_file():
+        align_df = pd.read_csv(aligned_csv_path)
+        # Drop any rows that are missing t0 and t1 values
+        align_df = align_df.dropna(axis=0, subset=['t0', 't1'])
     else:
-        aligned_dirpath.mkdir(parents=True, exist_ok=True)
         align_df = pd.DataFrame()
+    error_csv_path = aligned_dirpath / error_csv_name
+    if error_csv_path.is_file():
+        error_df = pd.read_csv(error_csv_path)
+    else:
+        error_df = pd.DataFrame({'image name': [], 'error time': []})
+
+    # else:
+    #
+    #     align_df = pd.DataFrame()
+    #     aligned_csv_path = aligned_dirpath / alignment_csv_name
 
     # Save info about images in dataframes
     imgs1_df = pd.DataFrame()
     for imgname1 in imgnames1:
-        info_df = extract_img_info(imgname1)
+        info_df = utils.extract_img_info(imgname1)
         imgs1_df = pd.concat([imgs1_df, info_df], ignore_index=True)
 
     imgs2_df = pd.DataFrame()
     for imgname2 in imgnames2:
-        info_df = extract_img_info(imgname2)
+        info_df = utils.extract_img_info(imgname2)
         imgs2_df = pd.concat([imgs2_df, info_df], ignore_index=True)
 
     # Match up images based on the scene information
@@ -281,7 +332,7 @@ def batch_align_2imgs(aligndir, img1_ch_align=0, img2_ch_align=0, img1_ch_subset
         error_df.to_csv(error_csv_path, index=False)
 
     # Move original, unaligned images to a new folder
-    unaligned_parent_dirpath = multiexp_dirpath / orig_unaligned_dirname
+    unaligned_parent_dirpath = multiexp_dirpath / dn.orig_unaligned_dirname
     unaligned_parent_dirpath.mkdir(parents=True, exist_ok=True)
     shutil.move(aligndir, unaligned_parent_dirpath)
 
@@ -293,14 +344,14 @@ def multiexp_align(multiexp_dir, img1_ch_align=0, img2_ch_align=0, img1_ch_subse
     # (excluding the directories that contain     already aligned or
     # original, unaligned images corresponding to already aligned images)
     aligndirs = [aligndir for aligndir in multiexp_dir.iterdir() if (aligndir.is_dir() &
-                                                                     (aligndir.name not in [orig_unaligned_dirname,
-                                                                                            aligned_dirname]))]
+                                                                     (aligndir.name not in [dn.orig_unaligned_dirname,
+                                                                                            dn.aligned_dirname]))]
     num_dirs = len(aligndirs)
 
     # Create directories for aligned, unaligned images
-    aligned_dirpath = Path(multiexp_dir) / aligned_dirname
+    aligned_dirpath = Path(multiexp_dir) / dn.aligned_dirname
     aligned_dirpath.mkdir(parents=True, exist_ok=True)
-    orig_unaligned_dirpath = Path(multiexp_dir) / orig_unaligned_dirname
+    orig_unaligned_dirpath = Path(multiexp_dir) / dn.orig_unaligned_dirname
     orig_unaligned_dirpath.mkdir(parents=True, exist_ok=True)
 
     for i, aligndir in enumerate(aligndirs):

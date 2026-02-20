@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
-from aicsimageio.writers import OmeTiffWriter
+from bioio import BioImage
+import bioio_ome_tiff
+from bioio.writers import OmeTiffWriter
 from src.d00_utils.dirnames import proc_dirname
 
 # Variables to help parse img file names
@@ -46,10 +46,9 @@ def search_name(name_elems, searchphrase):
     return info
 
 
-def construct_ome_metadata(new_img, physical_pixel_sizes, channel_names=None):
-    ome_metadata = OmeTiffWriter.build_ome(data_shapes=[new_img.data.shape], data_types=[np.dtype(new_img.dtype)],
-                                           physical_pixel_sizes=[physical_pixel_sizes], channel_names=[channel_names])
-
+def construct_ome_metadata(new_img, init_img_file, channel_names=None):
+    ome_metadata = OmeTiffWriter.build_ome(data_shapes=[new_img.data.shape], data_types=[new_img.dtype], dimension_order=[init_img_file.dims.order],
+                                           physical_pixel_sizes=[init_img_file.physical_pixel_sizes], channel_names=[channel_names])
     return ome_metadata
 
 
@@ -93,29 +92,49 @@ def get_proc_dirpath(input_dirpath):
     else:
         return get_proc_dirpath(input_dirpath.parent)
 
+def create_ch_subset(ch_subset, imgpath, img=None, img_file=None, output_dir=None):
 
-def new_or_overwrite_ok(filepath):
-    if filepath.exists():
-        overwrite_yn = input(f'\'{filepath}\' already exists. Overwrite? Enter Y/N\n')
-        if overwrite_yn.lower() == 'n':
-            return False
-    return True
-
-def create_ch_subset(ch_subset, imgpath, img=None, pixelsizes=None, output_dir=None):
     if img is None:
-        img_file = AICSImage(imgpath, reader=OmeTiffReader)
+        img_file = BioImage(imgpath, reader=bioio_ome_tiff.Reader)
         img = img_file.data
-        pixelsizes = img_file.physical_pixel_sizes
 
-    img_chs = [img[:, ch, np.newaxis, :, :, :] for ch in ch_subset]
-    img_chsubset = np.concatenate(img_chs, axis=1)
+    img_chsubset = img[:, ch_subset, :, :, :]
 
     if output_dir is None:
         chstr = ''.join(str(ch) for ch in ch_subset)
         output_dir = imgpath.parent.parent / (imgpath.parent.name + '_chsubset' + chstr)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    subset_ome_metadata = construct_ome_metadata(img_chsubset, pixelsizes)
+    subset_ome_metadata = construct_ome_metadata(img_chsubset, img_file)
     OmeTiffWriter.save(img_chsubset, output_dir / imgpath.name, ome_xml=subset_ome_metadata)
 
     return img_chsubset
+
+def safe_save_csv(df, df_path):
+    if df_path.is_file():
+        prev_df_path = str(df_path).split('.csv')[0] + '_prev.csv'
+        df_path.rename(prev_df_path)
+    df.to_csv(df_path, index=False)
+    return
+
+def move_columns_to_front(df, front_cols):
+    """
+    Reorder a DataFrame so that `front_cols` appear first, preserving order.
+
+    Args:
+        df (pd.DataFrame): The dataframe to reorder.
+        front_cols (list of str): List of columns to move to the front.
+
+    Returns:
+        pd.DataFrame: Reordered dataframe.
+    """
+    # Ensure front_cols are actually in the dataframe (in case of typos)
+    front_cols_existing = [col for col in front_cols if col in df.columns]
+
+    # List all other columns not in front_cols
+    remaining_cols = [col for col in df.columns if col not in front_cols_existing]
+
+    # Combine the two lists
+    new_order = front_cols_existing + remaining_cols
+
+    return df[new_order]
