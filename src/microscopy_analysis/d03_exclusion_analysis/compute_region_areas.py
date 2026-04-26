@@ -40,4 +40,3 @@ def compute_region_areas(cellregions, imgdata, cellreg_ch_d, pixel_area):
     imgdata_df = add_areas_df(cellregions, pixel_area, imgdata, cellreg_ch_d)
 
     return imgdata_df
-

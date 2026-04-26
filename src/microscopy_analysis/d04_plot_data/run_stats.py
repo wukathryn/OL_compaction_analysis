@@ -1,102 +1,231 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-def style_standard_plot(ax):
-    """Standard formatting for plots."""
-    sns.despine(ax=ax)
-    ymins, ymaxs = ax.get_ylim()
-    if ymins >= 0:
-        ax.set_ylim(bottom=0)
-    ax.legend(frameon=False)
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+from scipy import stats
+from statsmodels.stats.anova import AnovaRM
+from statsmodels.stats.multitest import multipletests
 
-def plot_individual_tp(
-    df_long, stats_df, tp, xcol, ycol, group_col,
-    comparison_label, labels, palette=None, savepath=None
-):
-    """Plot scatter + mean ± SEM for a specific timepoint, with significance annotation."""
-    df_tp = df_long[df_long[xcol] == tp].copy()
-    sig_row = stats_df[
-        (stats_df['timepoint'] == tp) & (stats_df['comparison'] == comparison_label)
+import microscopy_analysis.d04_plot_data.plot_timelapse_data as ptd
+
+def clean_vars_for_stats(df, subject, time, group, value):
+
+    cols_to_clean = [subject, time, group, value]
+
+    # build mapping {old: cleaned}
+    col_mapping = {col: ptd.clean_column_name(col) for col in cols_to_clean}
+
+    # rename using dict
+    df = df.rename(columns=col_mapping)
+
+    # unpack cleaned names
+    subject, time, group, value = col_mapping.values()
+
+    return df, subject, time, group, value
+
+def run_repeated_measures_stats(df, subject, time, group_category, ycol, comparison_label, melt_df=True):
+    if melt_df:
+        df_long = df.melt(
+            id_vars=[subject, time],
+            value_vars=comparison_label['columns'],
+            var_name=group_category,
+            value_name=ycol
+        )
+    else:
+        df_long = df
+
+    posthoc_df = repeated_measures_with_posthoc(
+        df_long=df_long,
+        subject=subject,
+        time=time,
+        group=group_category,
+        value=ycol
+    )
+
+    posthoc_df['comparison'] = comparison_label['name']
+    return df_long, posthoc_df
+#
+# def repeated_measures_with_posthoc(df_long, subject, time, group, value, alpha=0.05):
+#     """
+#     RM-ANOVA (within: time, group) + per-timepoint posthocs (paired if matched subjects; else Welch).
+#     Returns both overall interaction ANOVA and timepoint-specific post-hoc results.
+#     """
+#     df_long, subject, time, group, value = clean_vars_for_stats(df_long, subject, time, group, value)
+#     df_long = df_long[[subject, time, group, value]].copy()
+#     time_levels = sorted(df_long[time].unique())
+#
+#     # RM-ANOVA
+#     aov = AnovaRM(df_long, depvar=value, subject=subject, within=[time, group]).fit()
+#     at = aov.anova_table
+#     inter_key = f'{time}:{group}' if f'{time}:{group}' in at.index else f'{group}:{time}'
+#     inter_p = at.loc[inter_key, 'Pr > F']
+#
+#     # Record overall interaction ANOVA result
+#     output_rows = [{
+#         'timepoint': 'interaction',
+#         'comparison': f'{time} × {group}',
+#         'p_value': inter_p,
+#         'p_value_fdr': np.nan,
+#         'significant': inter_p <= alpha,
+#         'test': 'RM-ANOVA',
+#     }]
+#
+#     # Skip post-hocs if not significant
+#     if not np.isfinite(inter_p) or inter_p > alpha:
+#         return pd.DataFrame(output_rows)
+#
+#     # Post-hoc per timepoint
+#     for t in time_levels:
+#         d = df_long[df_long[time] == t]
+#         groups_here = pd.unique(d[group].dropna())
+#         if len(groups_here) != 2:
+#             output_rows.append({
+#                 'timepoint': t,
+#                 'comparison': ' / '.join(groups_here),
+#                 'p_value': np.nan,
+#                 'p_value_fdr': np.nan,
+#                 'significant': False,
+#                 'test': 'n/a (!=2 groups)'
+#             })
+#             continue
+#
+#         g1, g2 = groups_here
+#         comp_str = f"{g1} vs {g2}"
+#
+#         # Try paired test
+#         pvt = d.pivot_table(index=subject, columns=group, values=value, aggfunc='mean')
+#         s1, s2 = pvt.get(g1), pvt.get(g2)
+#         if s1 is not None and s2 is not None:
+#             paired_idx = s1.dropna().index.intersection(s2.dropna().index)
+#             if len(paired_idx) >= 2:
+#                 _, p = stats.ttest_rel(s1.loc[paired_idx], s2.loc[paired_idx], nan_policy='omit')
+#                 output_rows.append({
+#                     'timepoint': t,
+#                     'comparison': comp_str,
+#                     'p_value': p,
+#                     'test': 'paired t-test',
+#                     'n_paired': len(paired_idx)
+#                 })
+#                 continue
+#
+#         # Fallback: Welch
+#         v1 = d.loc[d[group] == g1, value].dropna().values
+#         v2 = d.loc[d[group] == g2, value].dropna().values
+#         p = stats.ttest_ind(v1, v2, equal_var=False, nan_policy='omit')[1] if (len(v1) >= 2 and len(v2) >= 2) else np.nan
+#         output_rows.append({
+#             'timepoint': t,
+#             'comparison': comp_str,
+#             'p_value': p,
+#             'test': 'unpaired t-test (Welch)'
+#         })
+#
+#     out = pd.DataFrame(output_rows)
+#
+#     # FDR correction for all timepoint post-hocs only (exclude 'interaction' row)
+#     mask = out['timepoint'] != 'interaction'
+#     valid = out.loc[mask, 'p_value'].notna() & np.isfinite(out.loc[mask, 'p_value'])
+#     if valid.any():
+#         rej, p_adj, _, _ = multipletests(out.loc[mask & valid, 'p_value'], method='fdr_bh')
+#         out.loc[mask & valid, 'p_value_fdr'] = p_adj
+#         out.loc[mask & valid, 'significant'] = rej
+#     else:
+#         out.loc[mask, 'p_value_fdr'] = np.nan
+#         out.loc[mask, 'significant'] = False
+#
+#     # Clean column order
+#     cols = ['timepoint', 'comparison', 'p_value', 'p_value_fdr', 'significant', 'test']
+#     if 'n_paired' in out.columns:
+#         cols.append('n_paired')
+#     return out[cols]
+
+
+def repeated_measures_with_posthoc(df_long, subject, time, group, value, alpha=0.05):
+    """
+    RM-ANOVA (within: time, group) + per-timepoint posthocs (paired if matched subjects; else Welch).
+    Returns main effect p-values, interaction p-value, and timepoint-specific post-hoc results.
+    """
+    df_long, subject, time, group, value = clean_vars_for_stats(df_long, subject, time, group, value)
+    df_long = df_long[[subject, time, group, value]].copy()
+    time_levels = sorted(df_long[time].unique())
+
+    # RM-ANOVA
+    aov = AnovaRM(df_long, depvar=value, subject=subject, within=[time, group]).fit()
+    at = aov.anova_table
+    inter_key = f'{time}:{group}' if f'{time}:{group}' in at.index else f'{group}:{time}'
+    inter_p = at.loc[inter_key, 'Pr > F']
+    time_p = at.loc[time, 'Pr > F']
+    group_p = at.loc[group, 'Pr > F']
+
+    # Record main effects + interaction
+    output_rows = [
+        {'timepoint': 'main_time', 'comparison': f'{time}', 'p_value': time_p, 'p_value_fdr': np.nan, 'significant': time_p <= alpha, 'test': 'RM-ANOVA'},
+        {'timepoint': 'main_group', 'comparison': f'{group}', 'p_value': group_p, 'p_value_fdr': np.nan, 'significant': group_p <= alpha, 'test': 'RM-ANOVA'},
+        {'timepoint': 'interaction', 'comparison': f'{time} × {group}', 'p_value': inter_p, 'p_value_fdr': np.nan, 'significant': inter_p <= alpha, 'test': 'RM-ANOVA'}
     ]
 
-    # Relabel groups
-    colnames = df_tp[group_col].unique()
-    if len(colnames) == 2:
-        mapping = dict(zip(colnames, labels))
-        df_tp[group_col] = df_tp[group_col].map(mapping)
+    # Skip post-hocs if interaction not significant
+    if not np.isfinite(inter_p) or inter_p > alpha:
+        return pd.DataFrame(output_rows)
 
-    fig, ax = plt.subplots(figsize=(2.5, 3))
-    sns.stripplot(data=df_tp, x=group_col, y=ycol, jitter=True, size=7,
-                  ax=ax, hue=group_col, palette=palette, legend=False)
-    sns.pointplot(data=df_tp, x=group_col, y=ycol, linestyle='', errorbar='se',
-                  marker='_', markersize=25, markeredgewidth=2.5,
-                  zorder=3, color='k', capsize=0.1,
-                  err_kws={'linewidth': 1}, ax=ax)
+    # Per-timepoint post-hocs
+    for t in time_levels:
+        d = df_long[df_long[time] == t]
+        groups_here = pd.unique(d[group].dropna())
+        if len(groups_here) != 2:
+            output_rows.append({
+                'timepoint': t,
+                'comparison': ' / '.join(groups_here),
+                'p_value': np.nan,
+                'p_value_fdr': np.nan,
+                'significant': False,
+                'test': 'n/a (!=2 groups)'
+            })
+            continue
 
-    # Significance
-    if not sig_row.empty:
-        y_max = df_tp[ycol].max()
-        line_height = y_max * 1.05
-        tick_height = y_max * 0.01
-        ax.plot([0, 1], [line_height, line_height], lw=0.75, color='k')
-        ax.plot([0, 0], [line_height - tick_height, line_height], lw=0.75, color='k')
-        ax.plot([1, 1], [line_height - tick_height, line_height], lw=0.75, color='k')
-        text_height = line_height * 1.001
-        if sig_row.iloc[0]['significant']:
-            ax.text(0.5, text_height, '*', ha='center', va='bottom', fontsize=16)
-        else:
-            pval = sig_row.iloc[0]['p_value_fdr']
-            if pd.notnull(pval):
-                ax.text(0.5, text_height, f"{pval:.2g}", ha='center', va='bottom', fontsize=10)
+        g1, g2 = groups_here
+        comp_str = f"{g1} vs {g2}"
 
-    ax.set_xlim(-0.4, 1.4)
-    ax.set_ylabel(ycol)
-    style_standard_plot(ax)
-    plt.tight_layout()
-    if savepath:
-        fig.savefig(savepath, format='svg', bbox_inches='tight')
-    plt.show()
+        # Try paired test
+        pvt = d.pivot_table(index=subject, columns=group, values=value, aggfunc='mean')
+        s1, s2 = pvt.get(g1), pvt.get(g2)
+        if s1 is not None and s2 is not None:
+            paired_idx = s1.dropna().index.intersection(s2.dropna().index)
+            if len(paired_idx) >= 2:
+                _, p = stats.ttest_rel(s1.loc[paired_idx], s2.loc[paired_idx], nan_policy='omit')
+                output_rows.append({
+                    'timepoint': t,
+                    'comparison': comp_str,
+                    'p_value': p,
+                    'test': 'paired t-test',
+                    'n_paired': len(paired_idx)
+                })
+                continue
 
+        # Fallback: Welch
+        v1 = d.loc[d[group] == g1, value].dropna().values
+        v2 = d.loc[d[group] == g2, value].dropna().values
+        p = stats.ttest_ind(v1, v2, equal_var=False, nan_policy='omit')[1] if (len(v1) >= 2 and len(v2) >= 2) else np.nan
+        output_rows.append({
+            'timepoint': t,
+            'comparison': comp_str,
+            'p_value': p,
+            'test': 'unpaired t-test (Welch)'
+        })
 
-def plot_timelapse_lines(df_long, xcol, ycol, hue, hue_order, palette=None,
-                         group_labels=None, graphname=None, save_dir=None,
-                         stats_df=None, figsize=(5, 3)):
-    """Plot timelapse lines with significance stars or FDR values."""
-    fig, ax = plt.subplots(figsize=figsize)
-    sns.lineplot(data=df_long, x=xcol, y=ycol, errorbar='se',
-                 hue=hue, hue_order=hue_order, palette=palette, ax=ax)
+    out = pd.DataFrame(output_rows)
 
-    # Calculate SEM-based star height
-    sems = df_long.groupby([xcol, hue])[ycol].agg(['mean', 'sem'])
-    sems['upperSEM'] = sems['mean'] + sems['sem']
-    upper_sems = sems.groupby(xcol)['upperSEM'].max().reset_index()
-    spacing = 0.7 * upper_sems['upperSEM'].mean()
-    upper_sems['y_star'] = upper_sems['upperSEM'] + spacing
+    # FDR correction (post-hoc timepoints only)
+    mask = ~out['timepoint'].isin(['main', 'interaction'])
+    valid = out.loc[mask, 'p_value'].notna() & np.isfinite(out.loc[mask, 'p_value'])
+    if valid.any():
+        rej, p_adj, _, _ = multipletests(out.loc[mask & valid, 'p_value'], method='fdr_bh')
+        out.loc[mask & valid, 'p_value_fdr'] = p_adj
+        out.loc[mask & valid, 'significant'] = rej
+    else:
+        out.loc[mask, 'p_value_fdr'] = np.nan
+        out.loc[mask, 'significant'] = False
 
-    # Annotate
-    if stats_df is not None:
-        sig_rows = stats_df[(stats_df['comparison'] == graphname) & (stats_df['timepoint'] != 'interaction')]
-        for _, row in sig_rows.iterrows():
-            tp = row['timepoint']
-            y_star_row = upper_sems[upper_sems[xcol] == tp]
-            if not y_star_row.empty:
-                y_star = y_star_row['y_star'].values[0]
-                if row['significant']:
-                    ax.text(tp, y_star, '*', ha='center', va='bottom', fontsize=14, color='k')
-                else:
-                    label = f"{row['p_value_fdr']:.2g}" if pd.notnull(row['p_value_fdr']) else ''
-                    ax.text(tp, y_star, label, ha='center', va='bottom', fontsize=7, color='k')
-
-    if group_labels is not None:
-        handles, _ = ax.get_legend_handles_labels()
-        ax.legend(handles=handles, labels=group_labels)
-
-    style_standard_plot(ax)
-    ax.set_ylabel(ycol)
-    plt.tight_layout()
-    if graphname and save_dir:
-        fig.savefig(save_dir / f"{graphname}.svg", format='svg', bbox_inches='tight')
-    plt.show()
+    # Column order
+    cols = ['timepoint', 'comparison', 'p_value', 'p_value_fdr', 'significant', 'test']
+    if 'n_paired' in out.columns:
+        cols.append('n_paired')
+    return out[cols]

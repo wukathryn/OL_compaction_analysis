@@ -4,7 +4,7 @@ from pathlib import Path
 from bioio import BioImage
 import bioio_ome_tiff
 from bioio.writers import OmeTiffWriter
-from src.d00_utils.dirnames import proc_dirname
+from microscopy_analysis.d00_utils.dirnames import proc_dirname
 
 # Variables to help parse img file names
 exp_search = 'CE'

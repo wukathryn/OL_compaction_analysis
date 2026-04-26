@@ -2,14 +2,14 @@ import os
 from pathlib import Path
 import pandas as pd
 
-import src.d00_utils.utilities as utils
+import microscopy_analysis.d00_utils.utilities as utils
 from . import definecellregions
 from . import compute_region_areas
 from aicsimageio import AICSImage
 from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
 from aicsimageio.writers import OmeTiffWriter
-from src.d00_utils.dirnames import excl_analysis_dirname
-from src.d00_utils.utilities import get_pixel_area
+from microscopy_analysis.d00_utils.dirnames import excl_analysis_dirname
+from microscopy_analysis.d00_utils.utilities import get_pixel_area
 
 def process_timelapse(imgpath, channels_d, excl_analysis_dirpath):
     img_file = AICSImage(imgpath, reader=OmeTiffReader)
@@ -53,4 +53,3 @@ def batch_exclusion_analysis(input_dir, channels_d):
         overall_df = pd.concat([overall_df, imgdata_df], ignore_index=True)
 
     overall_df.to_csv(Path(excl_analysis_dirpath) / 'region_areas_df.csv', index=False)
-

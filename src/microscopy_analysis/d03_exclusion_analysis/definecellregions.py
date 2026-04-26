@@ -1,11 +1,7 @@
-import tifffile as tif
 import numpy as np
 from collections import OrderedDict
 from skimage.morphology import remove_small_objects
-import src.d00_utils.utilities as utils
-from aicsimageio.writers import OmeTiffWriter
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
+
 
 def define_regions(img, channels_d):
 
@@ -63,4 +59,3 @@ def define_regions(img, channels_d):
     cellregions = (cellregions * np.iinfo(img.dtype).max).astype('uint8')
 
     return cellregions, cellreg_ch_d
-

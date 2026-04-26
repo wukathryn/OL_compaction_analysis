@@ -4,7 +4,7 @@ from bioio import BioImage
 import bioio_ome_tiff
 from bioio.writers import OmeTiffWriter
 from skimage import morphology, segmentation
-from skimage.measure import label, regionprops, regionprops_table
+from skimage.measure import label, regionprops
 from scipy import ndimage as ndi
 from skimage.draw import polygon2mask
 from matplotlib import pyplot as plt
@@ -14,8 +14,8 @@ import sys
 src_path = str(Path.cwd().parent)
 if src_path not in sys.path:
     sys.path.append(src_path)
-import src.d00_utils.dirnames as dn
-import src.d00_utils.utilities as utils
+import microscopy_analysis.d00_utils.dirnames as dn
+import microscopy_analysis.d00_utils.utilities as utils
 
 z = 0
 

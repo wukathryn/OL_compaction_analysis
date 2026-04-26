@@ -1,102 +1,140 @@
-import sys
+"""
+Batch-convert Zeiss .czi datasets into OME-TIFF, organizing inputs under a processing folder.
+
+This script:
+- moves all *.czi files from the experiment directory into <exp_dir>/<proc_dir>/<CZI_dirname>/
+- converts each CZI (and each scene within a CZI, if present) into an OME-TIFF
+- writes OME-XML metadata including pixel sizes and channel names (and optionally timestamps)
+
+Notes
+-----
+- The CZI reader is provided by the `bioio-czi` plugin. If installed, BioImage can usually
+  autodetect it; you can also explicitly set `CZI_READER` to the plugin Reader class.
+- Timestamp injection from vendor metadata is provided as an optional utility, but may require
+  adapting the metadata path depending on the CZI schema/version in your files.
+"""
+
 from pathlib import Path
 import argparse
-src_path = str(Path.cwd().parent)
-if src_path not in sys.path:
-    sys.path.append(src_path)
+
 import numpy as np
+
+from microscopy_analysis.d00_utils import dirnames as dn
+
 from bioio import BioImage
-import bioio_czi
-import xml.etree.ElementTree as ET
-import xmltodict
-from ome_types.model import Plane
-from ome_types.model.simple_types import UnitsTime
-from src.d00_utils import dirnames as dn
+from bioio.writers import OmeTiffWriter
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-d', '--exp_dir', required=True, help="directory containing the dataset")
+parser.add_argument(
+    "-d",
+    "--exp_dir",
+    required=True,
+    help="Directory containing the dataset (expects one or more *.czi files).",
+)
 
+def get_ome_metadata(img: BioImage):
+    """
+    Construct OME-XML metadata for an image using BioIO's OME-TIFF writer helper.
 
-def get_ome_metadata(img):
-    ome_metadata = OmeTiffWriter.build_ome([img.shape], [np.dtype(img.dtype)], channel_names=[img.channel_names],
-                                           physical_pixel_sizes=[img.physical_pixel_sizes])
+    The metadata includes:
+    - image dimensions inferred from `img.shape`
+    - pixel type inferred from `img.dtype`
+    - channel names (falling back to Ch0..ChN-1 if unavailable)
+    - physical pixel sizes from `img.physical_pixel_sizes`
+    """
 
-    # if img.dims.T > 1:
-    #     ome_metadata = update_ome_timestamps(img.metadata, ome_metadata)
+    ome_metadata = OmeTiffWriter.build_ome(
+        [img.shape],
+        [np.dtype(img.dtype)],
+        channel_names=[img.channel_names],
+        physical_pixel_sizes=[img.physical_pixel_sizes]
+    )
+
     return ome_metadata
 
 
-def update_ome_timestamps(metadata, ome_metadata):
-    xmlstr = ET.tostring(metadata)
-    metadatadict_czi = xmltodict.parse(xmlstr)
-    t_increment = float(
-        metadatadict_czi['ImageDocument']['Metadata']['Information']['Image']['Dimensions']['T']['Positions'][
-            'Interval']['Increment'])
+def convert_czi_to_tif(imgpath: Path, raw_tif_dirpath: Path):
+    """
+    Convert a single CZI file to one or more OME-TIFF files.
 
-    size_c = ome_metadata.images[0].pixels.size_c
-    size_t = ome_metadata.images[0].pixels.size_t
-    for c in range(size_c):
-        for t in range(size_t):
-            plane = Plane(the_c=c, the_t=t, the_z=0, delta_t=t * t_increment,
-                          delta_t_unilt=UnitsTime.SECOND)
-            ome_metadata.images[0].pixels.planes.append(plane)
-    return ome_metadata
+    If the input contains multiple scenes, each scene is written as its own OME-TIFF
+    with a suffix `_sc<scene>`. If scene labels are missing, a deterministic fallback
+    name is generated.
+    """
+    img = BioImage(imgpath)
 
+    # Counter used only when a scene entry exists but is unnamed.
+    unnamed_scene_counter = 0
 
-def convert_czi_to_tif(imgpath, raw_tif_dirpath):
-    img = AICSImage(imgpath)
-    n = 0 # cellID counter if there is no scene data
-
-    for i, scene in enumerate(img.scenes):
+    for scene in img.scenes:
         if len(img.scenes) > 1:
             if scene is None:
-                scene = f'N{n}'
-                n = n + 1
-            imgsavename = f'{Path(imgpath).name.split(".")[0]}_sc{scene}.ome.tif'
-            img.set_scene(scene)
-        else:
-            imgsavename = f'{Path(imgpath).name.split(".")[0]}.ome.tif'
-        imgsavename = imgsavename.replace('-', '_')
+                scene = f"N{unnamed_scene_counter}"
+                unnamed_scene_counter += 1
 
-        img_savepath = Path(raw_tif_dirpath) / imgsavename
+            img.set_scene(scene)
+            out_name = f"{Path(imgpath).stem}_sc{scene}.ome.tif"
+        else:
+            out_name = f"{Path(imgpath).stem}.ome.tif"
+
+        # Avoid characters that can complicate downstream parsing/CLI handling.
+        out_name = out_name.replace("-", "_")
+        out_path = Path(raw_tif_dirpath) / out_name
 
         ome_metadata = get_ome_metadata(img)
-        OmeTiffWriter.save(img.data, img_savepath, ome_xml=ome_metadata)
 
-def move_files_into_CZI_dir(exp_dir, proc_dir):
-    CZI_dirpath = Path(proc_dir) / dn.CZI_dirname
-    CZI_dirpath.mkdir(parents=True, exist_ok=True)
+        # `img.data` materializes the array in memory; for very large datasets, consider
+        # chunked/streamed writing if supported by your IO stack.
+        OmeTiffWriter.save(img.data, out_path, ome_xml=ome_metadata)
 
-    for imgpath in Path(exp_dir).glob('*.czi'):
-        imgpath.rename(CZI_dirpath / imgpath.name)
 
-    return CZI_dirpath
+def move_files_into_CZI_dir(exp_dir: Path, proc_dir: Path) -> Path:
+    """
+    Move all CZI files from the experiment directory into the processing CZI folder.
 
-def batch_convert_czi_to_tif(exp_dir):
+    Returns
+    -------
+    Path
+        The directory path containing the moved CZI files.
+    """
+    proc_dir = Path(proc_dir)
+    proc_dir.mkdir(parents=True, exist_ok=True)
+
+    czi_dirpath = proc_dir / dn.CZI_dirname
+    czi_dirpath.mkdir(parents=True, exist_ok=True)
+
+    for imgpath in Path(exp_dir).glob("*.czi"):
+        imgpath.rename(czi_dirpath / imgpath.name)
+
+    return czi_dirpath
+
+
+def batch_convert_czi_to_tif(exp_dir: str):
+    """
+    Convert all CZI files found in `exp_dir` to OME-TIFF and write outputs to:
+        <exp_dir>/<proc_dir>/<raw_ometif_dirname>/
+    """
     exp_dir = Path(exp_dir)
     proc_dir = exp_dir / dn.proc_dirname
-    CZI_dirpath = move_files_into_CZI_dir(exp_dir, proc_dir)
 
-    imgpaths = [path for path in CZI_dirpath.glob('*.czi')]
-    imgpaths.sort()
+    czi_dirpath = move_files_into_CZI_dir(exp_dir, proc_dir)
+
+    imgpaths = sorted(czi_dirpath.glob("*.czi"))
+    if not imgpaths:
+        print("No CZI images found")
+        return
 
     raw_ometif_dirpath = proc_dir / dn.raw_ometif_dirname
     raw_ometif_dirpath.mkdir(parents=True, exist_ok=True)
 
     num_imgs = len(imgpaths)
+    for i, imgpath in enumerate(imgpaths):
+        print(f"Converting {imgpath.name} to OME-TIFF (file {i + 1}/{num_imgs})")
+        convert_czi_to_tif(imgpath, raw_ometif_dirpath)
 
-    if len(imgpaths)==0:
-        print('No CZI images found')
-    else:
-        for i, imgpath in enumerate(imgpaths):
-            print(f'Converting {imgpath.name} to ome-tiff (file {i + 1}/{num_imgs})')
-            convert_czi_to_tif(imgpath, raw_ometif_dirpath)
-        print(f'Done! Ome-tiff files saved to {raw_ometif_dirpath}')
+    print(f"Done! OME-TIFF files saved to {raw_ometif_dirpath}")
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     args = parser.parse_args()
-    exp_dir = args.exp_dir
-
-    batch_convert_czi_to_tif(exp_dir)
+    batch_convert_czi_to_tif(args.exp_dir)

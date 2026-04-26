@@ -1,7 +1,14 @@
-# src/init_notebook.py
 import sys
 from pathlib import Path
 
-src_path = Path(__file__).resolve().parent
-if str(src_path) not in sys.path:
-    sys.path.append(str(src_path))
+
+def add_repo_src_to_path() -> Path:
+    """Ensure the repository's src directory is importable in notebooks."""
+    src_path = Path(__file__).resolve().parents[2]
+    src_str = str(src_path)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+    return src_path
+
+
+SRC_PATH = add_repo_src_to_path()

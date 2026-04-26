@@ -7,11 +7,10 @@ import pandas as pd
 from bioio import BioImage
 import bioio_ome_tiff
 from bioio.writers import OmeTiffWriter
-from src.d00_utils import utilities as utils
-from src.d00_utils import dirnames as dn
+from microscopy_analysis.d00_utils import utilities as utils
+from microscopy_analysis.d00_utils import dirnames as dn
 from tqdm import tqdm
-#TODO: clean up
-#from src.d03_exclusion_analysis.analyze_ch_byROI import extract_ROIs
+
 
 dpi = 100
 

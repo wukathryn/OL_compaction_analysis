@@ -3,7 +3,7 @@ from bioio import BioImage
 import bioio_ome_tiff
 from bioio.writers import OmeTiffWriter
 from skimage.exposure import match_histograms
-import src.d00_utils.utilities as utils
+import microscopy_analysis.d00_utils.utilities as utils
 import numpy as np
 
 # Might not be useful
@@ -56,5 +56,3 @@ def timelapse_simpleratio(img, t_ref=0):
     img_corr = np.broadcast_to(simple_ratio, img.shape) * img
 
     return img_corr
-
-

@@ -10,8 +10,8 @@ from skimage.draw import polygon2mask
 from skimage.morphology import remove_small_objects
 from scipy.ndimage import binary_fill_holes
 
-import src.d00_utils.dirnames as dn
-import src.d00_utils.utilities as utils
+import microscopy_analysis.d00_utils.dirnames as dn
+import microscopy_analysis.d00_utils.utilities as utils
 
 
 parser = argparse.ArgumentParser()

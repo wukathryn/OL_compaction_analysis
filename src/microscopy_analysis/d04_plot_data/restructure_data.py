@@ -21,26 +21,6 @@ def list_cells_to_omit(df, omit_col, cell_id='UID'):
         print(f'{omit_col} is not a column in this dataframe.')
         return []
 
-def list_cells_to_omit(df, omit_col, cell_id='UID'):
-    """
-    Returns a list of cells marked for omission in a given omit_col.
-
-    Args:
-        df (pd.DataFrame): Input dataframe.
-        omit_col (str): Column that marks cells to omit (expects 'Y' for omission).
-        cell_id (str): Column representing unique cell IDs (default 'UID').
-
-    Returns:
-        list: List of cell IDs to omit. Empty list if omit_col is not found.
-    """
-    if omit_col in df.columns:
-        cells_to_omit = df.loc[df[omit_col] == 'Y', cell_id].unique().tolist()
-        print(f'Cells omitted: {cells_to_omit}')
-        return cells_to_omit
-    else:
-        print(f'{omit_col} is not a column in this dataframe.')
-        return []
-
 
 def filter_incomplete_data(df, time_col, cell_id='UID', value_col=None, max_num_incomplete=2):
     """
@@ -177,22 +157,3 @@ def compute_means_by_biorep(df, groupbycols, ycols, omit_col='omit', cell_id='UI
     df_biorep = pd.merge(df_means, df_counts, on=groupbycols)
 
     return df_biorep
-
-
-def clean_column_name(colname):
-    colname = colname.replace('compact', 'cmp')
-    colname = colname.replace('%', 'perc')
-    colname = colname.replace('-', '')
-    colname = re.sub(r'\W+', '_', colname)
-    colname = colname.strip('_')
-    colname = colname.replace('compact', 'cmp')
-    return colname.lower()
-
-
-def edit_ycol(label):
-    label = label.replace('change in', 'Δ').strip()
-    if not '(μm²)' in label:
-        label = label.replace('area', 'area (μm²)').strip()
-    label = label.replace('-positive', '+').strip()
-    label = label.replace('num', '#').strip()
-    return label

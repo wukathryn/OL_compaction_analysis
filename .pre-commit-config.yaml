@@ -1,0 +1,36 @@
+# pre-commit hooks for the microscopy_analysis repository.
+#
+# Install once per clone:
+#     pip install pre-commit
+#     pre-commit install
+#
+# Hooks then run automatically on every `git commit`. To run them manually
+# across all tracked files:
+#     pre-commit run --all-files
+
+repos:
+  # Strip cell outputs and execution counts from notebooks before they enter git history.
+  # Keeps diffs readable and prevents large output blobs (images, dataframes) from
+  # being committed.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+
+  # Lightweight repository-hygiene hooks from the official pre-commit collection.
+  # All are non-opinionated about code style; they only catch accidental noise.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Block any file > 5 MB from entering history (raw images, intermediate CSVs, etc.).
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      # Validate YAML and JSON syntax (catches typos in environment.yml, notebook JSON).
+      - id: check-yaml
+      - id: check-json
+      # Prevent commits containing unresolved merge conflict markers.
+      - id: check-merge-conflict
+      # Ensure files end with exactly one trailing newline.
+      - id: end-of-file-fixer
+      # Strip trailing whitespace.
+      - id: trailing-whitespace

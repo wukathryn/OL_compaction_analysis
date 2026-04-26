@@ -6,12 +6,11 @@ from bioio.writers import OmeTiffWriter
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter
 import pandas as pd
-from src.d00_utils import dirnames as dn
-from src.d00_utils import utilities as utils
+from microscopy_analysis.d00_utils import dirnames as dn
+from microscopy_analysis.d00_utils import utilities as utils
 from . import vis_and_rescale
 import itertools
 import ast
-from datetime import datetime
 
 
 def clip_upper_outliers(img, outlier_perc):
