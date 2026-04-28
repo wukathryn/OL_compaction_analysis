@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
+from bioio import BioImage
+import bioio_ome_tiff
+
 
 def open_cellregions(imgpath):
-    img_file = AICSImage(imgpath, reader=OmeTiffReader)
+    img_file = BioImage(imgpath, reader=bioio_ome_tiff.Reader)
     img = img_file.data
     # Include only binary thresholded cell region images
     cellregions = img[:, 2:, :, :, :]

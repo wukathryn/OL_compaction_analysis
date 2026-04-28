@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 import tifffile as tif
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
+from bioio import BioImage
+import bioio_ome_tiff
 from skimage.draw import polygon2mask
 from skimage.morphology import remove_small_objects
 from scipy.ndimage import binary_fill_holes
@@ -115,7 +115,7 @@ def batch_exclusion_analysis(img_dirpath):
     imgpaths = [imgpath for imgpath in img_dirpath.glob('*.ome.tif')]
 
     for imgpath in imgpaths:
-        img_file = AICSImage(imgpath, reader=OmeTiffReader)
+        img_file = BioImage(imgpath, reader=bioio_ome_tiff.Reader)
         pixelarea = utils.get_pixel_area(img_file.physical_pixel_sizes)
 
         rois, roi_labels, _ = extract_ROIs(metadata=img_file.metadata, img_shape=img_file.shape[-2:])

@@ -5,14 +5,15 @@ import pandas as pd
 import microscopy_analysis.d00_utils.utilities as utils
 from . import definecellregions
 from . import compute_region_areas
-from aicsimageio import AICSImage
-from aicsimageio.readers.ome_tiff_reader import OmeTiffReader
-from aicsimageio.writers import OmeTiffWriter
+from bioio import BioImage
+import bioio_ome_tiff
+from bioio.writers import OmeTiffWriter
 from microscopy_analysis.d00_utils.dirnames import excl_analysis_dirname
 from microscopy_analysis.d00_utils.utilities import get_pixel_area
 
+
 def process_timelapse(imgpath, channels_d, excl_analysis_dirpath):
-    img_file = AICSImage(imgpath, reader=OmeTiffReader)
+    img_file = BioImage(imgpath, reader=bioio_ome_tiff.Reader)
     img = img_file.data
     physical_pixel_sizes = img_file.physical_pixel_sizes
     cellregions, cellreg_ch_d = definecellregions.define_regions(img, channels_d)

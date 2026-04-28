@@ -1,5 +1,5 @@
 # Imports
-from aicsimageio.writers import OmeTiffWriter
+from bioio.writers import OmeTiffWriter
 import numpy as np
 
 from microscopy_analysis.d00_utils import utilities as utils
