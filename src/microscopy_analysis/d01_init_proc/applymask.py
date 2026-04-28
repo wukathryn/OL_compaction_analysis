@@ -1,3 +1,13 @@
+"""Polygon-ROI mask application and morphological cleanup of binary masks.
+
+This module wraps two concerns:
+
+1. Reading polygon ROIs from an OME-TIFF's metadata, rasterizing them to
+   masks, and saving per-ROI masked OME-TIFFs.
+2. Pure-numpy morphological helpers (hole filling, small-object removal,
+   border erosion of compaction near cell edges) used by upstream processing.
+"""
+
 import numpy as np
 from pathlib import Path
 from bioio import BioImage
@@ -10,10 +20,6 @@ from skimage.draw import polygon2mask
 from matplotlib import pyplot as plt
 import numpy.ma as ma
 
-import sys
-src_path = str(Path.cwd().parent)
-if src_path not in sys.path:
-    sys.path.append(src_path)
 import microscopy_analysis.d00_utils.dirnames as dn
 import microscopy_analysis.d00_utils.utilities as utils
 
@@ -76,7 +82,7 @@ def apply_ROI_masks(input_dirpath, mask_src, add_cellmask=True, bgsub_cell_ch=No
                 bgsub_cell = ma.masked_array(bgsub_cell, ~roi)
                 cellmask = refine_cellmask(bgsub_cell, min_size=100000)
                 cellmask = cellmask.squeeze().astype('uint8') * np.iinfo('uint8').max
-                OmeTiffWriter(cellmask).save(cellmasks_dirpath / (imgname_roi + '.png'))
+                OmeTiffWriter.save(cellmask, cellmasks_dirpath / (imgname_roi + '.png'))
                 roi = cellmask
 
             roi_exp = np.broadcast_to(roi, img.shape)
@@ -173,41 +179,3 @@ def extract_metadata_ROIs(metadata, img_shape):
         t_list.append(t)
 
     return rois, t_list, roi_labels, roi_coords
-
-
-def subtract_nuclei_from_cellmasks(nuclei_dirpath):
-    nuclei_dirpath = Path(nuclei_dirpath)
-
-    # Get directory path for cell masks
-    masks_dirpath = nuclei_dirpath.parent
-    cellmask_dirpath = masks_dirpath / dn.cellmask_dirname
-
-    # Check that both nuclei and cell mask directories exist
-    assert nuclei_dirpath.exists()
-    assert cellmask_dirpath.exists()
-
-    # Create an output path to save cell masks without nuclei
-    output_dirpath = masks_dirpath / dn.cellmask_nonuc_dirname
-    output_dirpath.mkdir(parents=True, exist_ok=True)
-
-    # Iterate through all tif files in the cell masks directory
-    cellmaskpaths = [path for path in cellmask_dirpath.glob('*.tif')]
-    for cellmaskpath in cellmaskpaths:
-
-        # Find the matching nucleus mask path
-        nucleipaths = [path for path in nuclei_dirpath.glob(f'{cellmaskpath.name}*')]
-        print(f'{len(nucleipaths)} nuclei found for {cellmaskpath.name}')
-
-        for nucleipath in nucleipaths:
-            cellmask_file = BioImage(cellmaskpath)
-            cellmask = cellmask_file.data.squeeze().astype('bool')
-
-            nuclei_file = BioImage(nucleipath, reader=bioio_ome_tiff.Reader)
-            nuclei = nuclei_file.data.squeeze().astype('bool')
-
-            # Create a cell mask without the nucleus
-            cellmask_nonuc = cellmask * ~nuclei
-
-            # Rescale and save the cell mask without the nucleus
-            cellmask_nonuc = cellmask_nonuc.astype('uint8') * np.iinfo('uint8').max
-            OmeTiffWriter(cellmask_nonuc).save(output_dirpath / nucleipath.name)

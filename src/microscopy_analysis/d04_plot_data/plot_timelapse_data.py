@@ -1,3 +1,11 @@
+"""Timelapse trajectory plotting and shared axis-styling helpers.
+
+Provides per-cell and per-condition trajectory plots used by the single-
+replicate timelapse notebook and shared formatting utilities (column-name
+sanitization, text wrapping, axis styling) reused by manuscript-figure
+notebooks.
+"""
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -6,6 +14,7 @@ import textwrap
 import re
 
 import microscopy_analysis.d04_plot_data.plot_settings as ps
+
 
 def clean_column_name(name):
     """Sanitize column name for use in filenames."""

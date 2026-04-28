@@ -1,3 +1,12 @@
+"""Timelapse intensity-correction utilities (histogram matching, simple ratio).
+
+Bleaching and acquisition-condition drift across timepoints are corrected
+either by matching each frame's intensity histogram to a reference frame
+(``timelapse_histomatch``, ``match_histograms_dir``) or by rescaling each
+frame so its mean intensity matches the reference frame's mean
+(``timelapse_simpleratio``).
+"""
+
 from pathlib import Path
 from bioio import BioImage
 import bioio_ome_tiff
@@ -6,7 +15,7 @@ from skimage.exposure import match_histograms
 import microscopy_analysis.d00_utils.utilities as utils
 import numpy as np
 
-# Might not be useful
+
 def match_histograms_dir(img_dirpath, ref_imgpath):
     ref_img = BioImage(ref_imgpath, reader=bioio_ome_tiff.Reader).data
 

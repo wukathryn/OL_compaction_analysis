@@ -1,3 +1,11 @@
+"""Repeated-measures ANOVA and post-hoc t-tests with multiple-test correction.
+
+Wraps :func:`statsmodels.stats.anova.AnovaRM` for within-subject designs
+(typical for timelapse compaction data) and produces per-timepoint
+posthoc comparisons with Bonferroni / Holm correction. The mixed-effects
+analogue lives in :mod:`run_stats_lmm` and :mod:`run_stats_lmm_r`.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -6,6 +14,7 @@ from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
 
 import microscopy_analysis.d04_plot_data.plot_timelapse_data as ptd
+
 
 def clean_vars_for_stats(df, subject, time, group, value):
 

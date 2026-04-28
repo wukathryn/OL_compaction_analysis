@@ -1,5 +1,14 @@
+"""Dataframe filters and pivots used before plotting and statistics.
+
+Includes helpers to identify cells flagged for omission, drop cells with
+incomplete time series, and restructure long-format analysis dataframes
+into the wide formats expected by trajectory plotting and the repeated-
+measures statistics in :mod:`run_stats`.
+"""
+
 import re
 import pandas as pd
+
 
 def list_cells_to_omit(df, omit_col, cell_id='UID'):
     """

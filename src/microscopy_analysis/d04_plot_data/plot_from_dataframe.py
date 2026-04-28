@@ -1,8 +1,17 @@
+"""Generic dataframe-driven plotting helpers.
+
+Used by single-replicate notebooks to render multi-panel timepoint plots
+and multi-condition comparisons directly from a long-format dataframe.
+Higher-level manuscript figures live in ``plot_timelapse_data`` and the
+``figures_for_paper`` notebooks.
+"""
+
 import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 
 def setup_fig_subplots(ydata_labels, max_cols=2):
     subplot_cols = min(len(ydata_labels), max_cols)

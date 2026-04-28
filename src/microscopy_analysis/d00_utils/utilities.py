@@ -1,3 +1,17 @@
+"""Shared utilities: filename parsing, OME-TIFF metadata, dataframe helpers.
+
+Filename conventions parsed by :func:`extract_img_info`:
+
+* ``CE<NN>``   - experiment ID (e.g. ``CE029``)
+* ``div<N>``   - days in vitro
+* ``tx<...>``  - treatment label
+* ``sc<N>``    - scene index from the acquisition
+* ``ROI<N>``   - region-of-interest index within a scene
+
+A unique cell ID is built as ``<scene>_<roi>``. Missing tokens are returned
+as ``NaN`` rather than raising, so partial filename schemes still parse.
+"""
+
 import pandas as pd
 import numpy as np
 from pathlib import Path

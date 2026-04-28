@@ -1,3 +1,14 @@
+"""Otsu-based background subtraction with smoothing and outlier clipping.
+
+Pipeline used by notebooks 04 and 06: for each image and parameter set,
+clip upper-intensity outliers, Gaussian-smooth the image, run Otsu on
+nonzero pixels to obtain a per-frame / per-channel / per-z-slice
+background threshold, and subtract that threshold from a smoothed copy
+of the original image. Results are written as OME-TIFF stacks plus a
+binary visualization, with a parameter-by-image table for downstream
+selection.
+"""
+
 from pathlib import Path
 import numpy as np
 from bioio import BioImage
@@ -203,9 +214,7 @@ def param_to_list(param):
 
 def subtract_median(img):
     img_ma = np.ma.masked_array(img, img == 0)
-
-    img_ma = np.ma.masked_array(img, img==0)
-    median = np.ma.median(img_ma, axis=(3,4))
+    median = np.ma.median(img_ma, axis=(3, 4))
     median = np.expand_dims(median, axis=(3,4))
     median = np.broadcast_to(median, img.shape).astype('float')
     img_bgsb = img.astype('float') - median

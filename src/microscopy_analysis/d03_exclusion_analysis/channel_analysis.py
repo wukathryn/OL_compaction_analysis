@@ -1,52 +1,28 @@
-# Imports
+"""Legacy region-decomposition analyses (overlap, percent-area, exclusion channel).
+
+Pixel-area and per-channel intensity helpers used by the active pipeline
+have moved to :mod:`microscopy_analysis.d02_metrics`. This module retains
+the older percent-area and overlap visualizations that were used in
+earlier analyses and are kept for archival reproducibility.
+"""
+
 from bioio.writers import OmeTiffWriter
 import numpy as np
 
 from microscopy_analysis.d00_utils import utilities as utils
+# Pixel-counting helpers were extracted to d02_metrics; re-exported here for
+# any legacy caller that imports them from this module by name.
+from microscopy_analysis.d02_metrics import compute_areas, compute_int
 
 from matplotlib import pyplot as plt
 
-# Variables
-binary_regions_dirname = "binary_regions"
-perc_area_dirname = "perc_area"
+# Output directory name and rounding precision used by ``calc_overlap``.
 overlap_dirname = "overlap"
-
-# t and z dimension indices
-tp = -1
-z = 0
-
 num_digits = 4
 
-# compute areas for each channel and add results to a dataframe
-def compute_areas(seg, seg_labels, df_idc, df, pixel_area):
-    regionareas = np.count_nonzero(seg, axis=(3, 4)) * pixel_area
-
-    size_c = seg.shape[1]
-    assert size_c == len(seg_labels)
-    for c in range(size_c):
-        df.loc[df_idc, f'{seg_labels[c]} area'] = regionareas[:, c, :]
-
-    return df
-
-# compute intensity for each channel (with an option to add masks) and add results to a dataframe
-def compute_int(img, ch_labels, df_idc, df, mask=None, mask_label=None):
-    if mask is not None:
-        mask = np.broadcast_to(mask, img.shape)
-        img = np.ma.masked_array(img, mask == 0)
-        mask_label = f' ({mask_label})'
-    else:
-        mask_label = ''
-
-    mean_int = np.ma.mean(img, axis=(3, 4))
-    median_int = np.ma.median(img, axis=(3, 4))
-
-    size_c = img.shape[1]
-    assert size_c == len(ch_labels)
-    for c in range(size_c):
-        df.loc[df_idc, f'mean {ch_labels[c]} int{mask_label}'] = mean_int[:, c, :].squeeze()
-        df.loc[df_idc, f'median {ch_labels[c]} int{mask_label}'] = median_int[:, c, :].squeeze()
-
-    return df
+# t and z dimension indices used by ``add_exclusion_channel``.
+tp = -1
+z = 0
 
 
 def add_exclusion_channel(binary_regions, cell_ch, caax_ch):
@@ -67,75 +43,6 @@ def check_and_convert_to_list(chs, size_c):
             chs = [chs]
     return chs
 
-
-def calc_perc_areas(denom_ch, numerator_ch, binary_regions, saveinfo, idv_perc_area_d):
-    (perc_area_dirpath, imgname, ch_labels, ch_save_abbr, physical_pixel_sizes) = saveinfo
-
-    # Mask image by the channel used as the denominator
-    denom_ch_mask = np.expand_dims(binary_regions[tp, denom_ch, z, :, :], axis=(0, 1, 2))
-    binary_regions_chmask = binary_regions * denom_ch_mask
-
-    # Save channel-masked binary regions
-    binary_chmask_dirpath = perc_area_dirpath / f'{binary_regions_dirname}_{ch_save_abbr[denom_ch]}-mask'
-    binary_chmask_dirpath.mkdir(parents=True, exist_ok=True)
-    ome_metadata = utils.construct_ome_metadata(binary_regions_chmask, physical_pixel_sizes, ch_labels)
-    OmeTiffWriter.save(binary_regions_chmask, binary_chmask_dirpath / imgname, ome_xml=ome_metadata)
-
-    # Calculate areas for each channel
-    ch_areas = np.count_nonzero(binary_regions_chmask, axis=(3, 4)).squeeze()
-    size_c = binary_regions_chmask.shape[1]
-    for ch in range(size_c):
-        idv_perc_area_d.update({f'{ch_labels[ch]} within {ch_labels[denom_ch]} area (pixels)': ch_areas[ch]})
-        # TODO: fix this section
-        # if physical_pixel_size is not None:
-        #     perc_areas_d.update({f'{ch_labels[ch]} within {ch_labels[denom_ch]} area (um)': ch_areas[ch] * pixel_size})
-
-    numerator_ch = check_and_convert_to_list(numerator_ch, size_c)
-
-    if ch_labels is None:
-        ch_labels = {denom_ch: f'ch {denom_ch}'}
-        for n_ch in numerator_ch:
-            ch_labels.update({n_ch: f'ch {n_ch}'})
-
-    for n_ch in numerator_ch:
-        if n_ch != denom_ch:
-
-            # Create directory for this specific analysis
-            analysis_dirpath = perc_area_dirpath / (f'perc_areas_{ch_save_abbr[n_ch]}_{ch_save_abbr[denom_ch]}')
-            analysis_dirpath.mkdir(parents=True, exist_ok=True)
-
-            # Calculations
-            perc_area = round((ch_areas[n_ch] / ch_areas[denom_ch]), num_digits)
-            idv_perc_area_d[f'{ch_labels[n_ch]} area / {ch_labels[denom_ch]} area'] = perc_area
-
-            # Create matplotlib figure
-            fig, axs = plt.subplots(1, 3, figsize=(10, 4))
-            plt.rcParams.update({'font.size': 7})
-            axs[0].imshow(binary_regions_chmask[tp, denom_ch, z, :, :], cmap='gray', interpolation=None)
-            axs[0].set_title(f'{ch_labels[denom_ch]}')
-            axs[1].imshow(binary_regions_chmask[tp, n_ch, z, :, :], cmap='gray', interpolation=None)
-            axs[1].set_title(f'{ch_labels[n_ch]}\nwithin {ch_labels[denom_ch]}')
-            axs[2].imshow(binary_regions_chmask[tp, denom_ch, z, :, :], cmap='Greys', interpolation=None)
-            axs[2].imshow(binary_regions_chmask[tp, n_ch, z, :, :], cmap='Purples', alpha=0.8, interpolation=None)
-            axs[2].set_title(
-                f'gray: {ch_labels[denom_ch]}\npurple: {ch_labels[n_ch]} overlap\n{round(perc_area * 100, num_digits)}%')
-
-            for ax in axs:
-                ax.axis('off')
-
-            plt.tight_layout()
-            plt.show()
-
-            base_imgname = imgname.split('.ome.tif')[0]
-            fig.suptitle(imgname)
-
-            # Save matplotlib figure
-            fig.savefig(analysis_dirpath / f'{base_imgname}.png')
-
-    return idv_perc_area_d
-
-
-# Analysis functions
 
 def calc_overlap(ch_1st, ch_2nd, binary_regions, saveinfo, idv_overlap_d):
     (overlap_dirpath, imgname, ch_labels, ch_save_abbr, physical_pixel_sizes) = saveinfo

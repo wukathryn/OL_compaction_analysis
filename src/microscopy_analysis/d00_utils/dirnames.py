@@ -1,3 +1,12 @@
+"""Standard directory names used across the per-experiment processing tree.
+
+A typical processed experiment lives at ``<experiment>/img_processing/`` and
+contains subdirectories for each pipeline stage (raw OME-TIFFs, aligned stacks,
+background-subtracted images, segmentations, masks, exclusion analysis, tables,
+graphs, and so on). Pipeline modules read these constants instead of hard-coded
+strings so directory layouts stay consistent across notebooks.
+"""
+
 CZI_dirname = 'CZI'
 aligned_dirname = 'aligned'
 orig_unaligned_dirname = 'orig_unaligned'

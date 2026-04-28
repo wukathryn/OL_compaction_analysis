@@ -1,3 +1,10 @@
+"""Put the repository's ``src`` directory on ``sys.path`` for notebook use.
+
+Provides a small fallback for notebook environments that have not run
+``pip install -e .``. After ``pip install``, the package is importable
+without this helper.
+"""
+
 import sys
 from pathlib import Path
 

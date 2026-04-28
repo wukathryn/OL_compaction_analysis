@@ -32,7 +32,6 @@ OL_compaction_analysis/
 │   ├── d01_init_proc/               CZI ingest, channel alignment, masking,
 │   │                                background subtraction
 │   ├── d02_metrics/                 area and intensity computation
-│   ├── d03_exclusion_analysis/      legacy region-decomposition analysis
 │   └── d04_plot_data/               plotting, statistics, linear-mixed-model
 │                                    fits (Python and R)
 └── notebooks/

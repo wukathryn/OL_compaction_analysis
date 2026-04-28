@@ -1,3 +1,10 @@
+"""Image rescaling for display + figure construction utilities.
+
+Provides percentile-based intensity rescaling (so heterogeneous image stacks
+display at comparable brightness) and figure-construction helpers used by the
+background-subtraction notebooks to produce parameter-comparison panels.
+"""
+
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
