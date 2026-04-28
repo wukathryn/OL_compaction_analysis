@@ -45,14 +45,14 @@ OL_compaction_analysis/
 
 ## Installation
 
-Requires Python 3.10. Conda is recommended for managing the heavy dependency
+Requires Python 3.13. Conda is recommended for managing the heavy dependency
 stack (BioImage I/O, scientific Python, matplotlib + seaborn).
 
 ```bash
 git clone https://github.com/wukathryn/OL_compaction_analysis.git
 cd OL_compaction_analysis
 conda env create -f environment.yml
-conda activate img_analysis
+conda activate cmp_analysis
 pip install -e .
 ```
 
@@ -80,7 +80,7 @@ pre-commit install
 Activate the environment and start Jupyter:
 
 ```bash
-conda activate img_analysis
+conda activate cmp_analysis
 jupyter lab
 ```
 
@@ -140,4 +140,4 @@ MIT — see `LICENSE`.
 
 ## Contact
 
-Kathryn Wu — wukathryn@gmail.com — Stanford University
+Kathryn Wu — wukathryn@gmail.com — Zuchero lab, Stanford University

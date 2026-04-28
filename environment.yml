@@ -1,38 +1,35 @@
-name: img_analysis
+name: cmp_analysis
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.13
 
   # scientific core
-  - numpy
-  - scipy
-  - pandas
-  - statsmodels
+  - numpy=1.26.4
+  - scipy=1.15.2
+  - pandas=2.2.3
+  - statsmodels=0.14.4
 
   # image processing / I/O
-  - scikit-image
-  - tifffile
-  - pillow
+  - scikit-image=0.22.0
+  - tifffile=2026.2.20
+  - pillow=11.1.0
 
   # plotting
-  - matplotlib
-  - seaborn
+  - matplotlib=3.10.0
+  - seaborn=0.13.2
 
-  # notebook
-  - jupyterlab
-  - ipykernel
-  - ipywidgets
-  - tqdm
+  # notebooks
+  - jupyterlab=4.3.5
+  - ipykernel=6.29.5
+  - tqdm=4.67.1
 
   # build / install
   - pip
   - pip:
-      # AICS / bioio ecosystem (pip-only)
-      - bioio
-      - bioio-ome-tiff
-      - bioio-tifffile
-      - bioio-imageio
-      - aicsimageio        # legacy, still used in d03_exclusion_analysis
-      # stats annotations on plots
-      - starbars
+      # bioio ecosystem (pip-only)
+      - bioio==3.2.0
+      - bioio-ome-tiff==1.4.0
+      - bioio-czi==2.6.0
+      # statistical annotations on plots
+      - starbars==3.1.1
