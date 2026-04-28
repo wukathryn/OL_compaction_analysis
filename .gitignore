@@ -93,3 +93,6 @@ fabric.properties
 # Editor-based Rest Client
 .idea/httpRequests
 notebooks/older/
+
+# JetBrains IDE
+.idea/

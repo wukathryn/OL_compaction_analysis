@@ -12,8 +12,7 @@ The pipeline is implemented as a sequence of Jupyter notebooks
 
 Two pipeline variants are provided:
 
-- **Single-timepoint analysis** — `notebooks/00_*` through `notebooks/10_*`
-  (top-level `notebooks/` directory)
+- **Single-timepoint analysis** — `notebooks/single_tp_analysis/`
 - **Timelapse analysis** — `notebooks/timelapse_analysis/`
 
 Both pipelines share the helper package in `src/microscopy_analysis/`.
@@ -36,25 +35,12 @@ OL_compaction_analysis/
 │   └── d04_plot_data/               plotting, statistics, linear-mixed-model
 │                                    fits (Python and R)
 └── notebooks/
-    ├── 00_Convert_CZIs.ipynb            CZI → OME-TIFF conversion
-    ├── 01_Multiexp_align_imgs.ipynb     align channels across experiments
-    ├── 02_Create_caax_cell_stack.ipynb  combine CAAX + cell channels
-    ├── 03_Select_images.ipynb           QC and image selection
-    ├── 04_Subtract_background_cell_channel.ipynb
-    ├── 05_Select_cellch_bgsub_bymask.ipynb
-    ├── 06_Subtract_background_caax_channel.ipynb
-    ├── 07_Select_caaxch_bgsub_bymask.ipynb
-    ├── 09_import_well_conditions.ipynb  attach experimental metadata
-    ├── 10_plot_exclusion_analysis_singleT_1exp.ipynb
-    │                                    final plotting (single replicate)
-    ├── Plot_exclusion_analysis_multiexp.ipynb  multi-experiment plotting
-    ├── Visualize_compaction.ipynb       qualitative visualization
-    ├── identify_outliers.ipynb          quality control
-    ├── timelapse_analysis/              timelapse-specific pipeline
-    ├── figures_for_paper/               manuscript figure-generation notebooks
-    ├── edit_csv_files/                  one-off data-wrangling utilities
-    └── helpful_functions/               additional utilities (mask editing,
-                                         image blinding for QC)
+    ├── single_tp_analysis/              single-timepoint pipeline (steps 00–11)
+    ├── timelapse_analysis/              timelapse pipeline (steps 02–10)
+    └── helpful_functions/               shared utilities: mask editing,
+                                         image blinding, dataframe wrangling,
+                                         well-condition standardization,
+                                         outlier identification
 ```
 
 ## Installation
@@ -100,52 +86,52 @@ jupyter lab
 
 ### Single-timepoint pipeline
 
-Run the top-level notebooks in numerical order. Each notebook reads its
-inputs from the previous step's outputs and updates a shared analysis
-dataframe (`analysis.csv`). Configuration cells at the top of each
-notebook point at the input/output directories — edit these for your
-data.
+Run the notebooks in `notebooks/single_tp_analysis/` in numerical order.
+Each notebook reads its inputs from the previous step's outputs and
+updates a shared analysis dataframe (`analysis.csv`). Configuration cells
+at the top of each notebook point at the input/output directories — edit
+these for your data.
 
 ```
-00_Convert_CZIs               raw .czi → ome-tiff
-01_Multiexp_align_imgs        align channels across replicates
-02_Create_caax_cell_stack     stack the CAAX + cell channels
-03_Select_images              manual QC / inclusion list
+00_Convert_CZIs                              raw .czi → ome-tiff
+01_Multiexp_align_imgs                       align channels across replicates
+02_Create_caax_cell_stack                    stack the CAAX + cell channels
+03_Select_images                             manual QC / inclusion list
 04_Subtract_background_cell_channel
 05_Select_cellch_bgsub_bymask
 06_Subtract_background_caax_channel
 07_Select_caaxch_bgsub_bymask
-09_import_well_conditions     attach treatment / condition metadata
-10_plot_exclusion_analysis_singleT_1exp
-                              final plots and statistics
+09_import_well_conditions                    attach treatment / condition metadata
+10_plot_exclusion_analysis_singleT_1exp      single-replicate plots and statistics
+11_plot_exclusion_analysis_multirep          multi-replicate manuscript figure
 ```
-
-(Notebook `08` is intentionally absent — that step is timelapse-only and
-lives under `notebooks/timelapse_analysis/`.)
 
 ### Timelapse pipeline
 
-For data with multiple timepoints, follow the same numbered convention
-within `notebooks/timelapse_analysis/`:
+For data with multiple timepoints, run the notebooks in
+`notebooks/timelapse_analysis/` in numerical order:
 
 ```
-02_align_ch_and_tp            align channels and timepoints
-03_split_chs                  channel splitting
-06_Stack_seg_apply_masks      stack segmentations and apply masks
-08_Calculateactin             actin-intensity metrics around compaction
-                              events (see notebook header for full
-                              description of the metrics)
-Plot_timelapse_data           timelapse trajectory plots
+02_align_ch_and_tp                           align channels and timepoints
+03_split_chs                                 channel splitting
+06_Stack_seg_apply_masks                     stack segmentations and apply masks
+08_Calculateactin                            actin-intensity metrics around
+                                             compaction events (see notebook
+                                             header for the full metric definitions)
+10_plot_timelapse_data_multirep              multi-replicate trajectory figure
 ```
 
-Plus utility notebooks for compaction-zone analysis, metric computation,
-and channel correction.
+Plus utility notebooks (`Plot_timelapse_data`, `analyze_indiv_cmpzones`,
+`compute_metrics`, `correct_actin_ch`) for single-replicate plotting,
+per-zone analysis, and channel correction.
 
-### Manuscript figures
+### Shared utilities
 
-Notebooks under `notebooks/figures_for_paper/` regenerate the multi-replicate
-figures in the manuscript from the per-experiment outputs of the pipelines
-above.
+Notebooks in `notebooks/helpful_functions/` are not part of either
+sequential pipeline. They cover one-off needs: editing cell masks,
+blinding image names for QC, merging or standardizing analysis
+dataframes, importing well-condition metadata, identifying outliers, and
+visualizing compaction qualitatively.
 
 ## License
 
