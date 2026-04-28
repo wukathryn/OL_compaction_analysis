@@ -79,7 +79,7 @@ def calc_perc_areas(denom_ch, numerator_ch, binary_regions, saveinfo, idv_perc_a
     binary_chmask_dirpath = perc_area_dirpath / f'{binary_regions_dirname}_{ch_save_abbr[denom_ch]}-mask'
     binary_chmask_dirpath.mkdir(parents=True, exist_ok=True)
     ome_metadata = utils.construct_ome_metadata(binary_regions_chmask, physical_pixel_sizes, ch_labels)
-    OmeTiffWriter.save(binary_regions_chmask, binary_chmask_dirpath / imgpath.name, ome_xml=ome_metadata)
+    OmeTiffWriter.save(binary_regions_chmask, binary_chmask_dirpath / imgname, ome_xml=ome_metadata)
 
     # Calculate areas for each channel
     ch_areas = np.count_nonzero(binary_regions_chmask, axis=(3, 4)).squeeze()
@@ -153,7 +153,7 @@ def calc_overlap(ch_1st, ch_2nd, binary_regions, saveinfo, idv_overlap_d):
     binaryoverlap_dirpath = overlap_dirpath / f'binary_{ch_save_abbr[ch_1st]}_{ch_save_abbr[ch_2nd]}'
     binaryoverlap_dirpath.mkdir(parents=True, exist_ok=True)
     ome_metadata = utils.construct_ome_metadata(binaryoverlap, physical_pixel_sizes, ch_labels)
-    OmeTiffWriter.save(binaryoverlap, binaryoverlap_dirpath / imgpath.name, ome_xml=ome_metadata)
+    OmeTiffWriter.save(binaryoverlap, binaryoverlap_dirpath / imgname, ome_xml=ome_metadata)
 
     areas = np.count_nonzero(binaryoverlap, axis=(0, 2, 3, 4))
 

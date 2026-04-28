@@ -1,8 +1,5 @@
-from setuptools import setup, find_packages
+# Project metadata is declared in pyproject.toml. This file is kept as a thin
+# shim so legacy tooling that invokes `python setup.py ...` continues to work.
+from setuptools import setup
 
-setup(
-    name='microscopy_analysis',
-    version='0.1',
-    packages=find_packages(where='src'),
-    package_dir={'': 'src'},
-)
+setup()

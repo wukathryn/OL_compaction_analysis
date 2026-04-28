@@ -25,13 +25,14 @@ OL_compaction_analysis/
 ├── README.md                        this file
 ├── environment.yml                  conda environment specification
 ├── requirements.txt                 pip equivalent
-├── setup.py                         installable Python package
+├── pyproject.toml                   Python package metadata
 ├── paper_figures.mplstyle           matplotlib style used for paper figures
 ├── src/microscopy_analysis/         core library
 │   ├── d00_utils/                   path/I-O helpers, notebook init
 │   ├── d01_init_proc/               CZI ingest, channel alignment, masking,
 │   │                                background subtraction
-│   ├── d03_exclusion_analysis/      ROI definition, exclusion-zone metrics
+│   ├── d02_metrics/                 area and intensity computation
+│   ├── d03_exclusion_analysis/      legacy region-decomposition analysis
 │   └── d04_plot_data/               plotting, statistics, linear-mixed-model
 │                                    fits (Python and R)
 └── notebooks/
@@ -101,6 +102,7 @@ these for your data.
 05_Select_cellch_bgsub_bymask
 06_Subtract_background_caax_channel
 07_Select_caaxch_bgsub_bymask
+08_compute_metrics                           per-image areas, intensities, % compaction
 09_import_well_conditions                    attach treatment / condition metadata
 10_plot_exclusion_analysis_singleT_1exp      single-replicate plots and statistics
 11_plot_exclusion_analysis_multirep          multi-replicate manuscript figure
@@ -118,12 +120,13 @@ For data with multiple timepoints, run the notebooks in
 08_Calculateactin                            actin-intensity metrics around
                                              compaction events (see notebook
                                              header for the full metric definitions)
+compute_metrics                              per-frame areas, intensities, % compaction
 10_plot_timelapse_data_multirep              multi-replicate trajectory figure
 ```
 
 Plus utility notebooks (`Plot_timelapse_data`, `analyze_indiv_cmpzones`,
-`compute_metrics`, `correct_actin_ch`) for single-replicate plotting,
-per-zone analysis, and channel correction.
+`correct_actin_ch`) for single-replicate plotting, per-zone analysis,
+and channel correction.
 
 ### Shared utilities
 

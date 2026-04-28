@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microscopy_analysis"
+version = "0.1.0"
+description = "Image-analysis pipeline for fluorescence microscopy of oligodendrocyte compaction events."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Kathryn Wu", email = "wukathryn@gmail.com" },
+]
+keywords = [
+    "microscopy",
+    "image-analysis",
+    "fluorescence",
+    "oligodendrocyte",
+    "bioio",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+dependencies = [
+    "numpy>=1.26,<2.0",
+    "scipy>=1.15",
+    "pandas>=2.2",
+    "statsmodels>=0.14",
+    "scikit-image>=0.22",
+    "tifffile>=2024.0",
+    "Pillow>=10",
+    "matplotlib>=3.10",
+    "seaborn>=0.13",
+    "tqdm>=4.66",
+    "bioio>=3.2,<4",
+    "bioio-ome-tiff>=1.4",
+    "bioio-czi>=2.6",
+    "starbars>=3",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "jupyterlab>=4",
+    "ipykernel>=6",
+]
+dev = [
+    "pytest>=8",
+    "pre-commit>=3",
+    "nbstripout>=0.7",
+]
+
+[project.urls]
+Repository = "https://github.com/wukathryn/OL_compaction_analysis"
+Issues = "https://github.com/wukathryn/OL_compaction_analysis/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+filterwarnings = [
+   "ignore::DeprecationWarning:xarray.*",
+]
