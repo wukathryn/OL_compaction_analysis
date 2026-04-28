@@ -1,0 +1,40 @@
+# Matplotlib style sheet for publication figures.
+#
+# Mirrors the rc parameters defined in
+# ``src/microscopy_analysis/d04_plot_data/plot_settings.py`` so that any
+# script or notebook can apply the shared figure style with
+# ``plt.style.use('paper_figures.mplstyle')``.
+#
+# Notebooks that also need the project color palettes or figure sizes
+# should additionally import them from ``plot_settings``.
+
+# --- Output ---------------------------------------------------------------
+svg.fonttype:        none
+figure.dpi:          150
+
+# --- Typography -----------------------------------------------------------
+font.family:         Arial
+axes.labelweight:    bold
+axes.labelsize:      11
+axes.labelpad:       7.5
+xtick.labelsize:     10
+ytick.labelsize:     10
+
+# --- Axes and ticks (seaborn "ticks" style equivalent) -------------------
+axes.linewidth:      1
+axes.facecolor:      white
+axes.edgecolor:      black
+axes.axisbelow:      True
+axes.grid:           False
+axes.spines.top:     False
+axes.spines.right:   False
+
+xtick.direction:     out
+ytick.direction:     out
+xtick.major.width:   1
+ytick.major.width:   1
+xtick.color:         black
+ytick.color:         black
+
+# --- Legend ---------------------------------------------------------------
+legend.frameon:      False
