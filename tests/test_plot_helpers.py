@@ -20,9 +20,24 @@ def test_clean_column_name_lowercases_and_replaces_spaces():
     assert ptd.clean_column_name("Mean Caax Int") == "mean_caax_int"
 
 
-def test_clean_column_name_strips_parens_and_slashes():
+def test_clean_column_name_collapses_non_word_chars_to_underscore():
+    # Spaces and parentheses both fall under \W+ and collapse to a single underscore.
     assert ptd.clean_column_name("mean caax int (cell)") == "mean_caax_int_cell"
-    assert ptd.clean_column_name("a/b") == "ab"
+    # The `/` is non-word and is replaced by an underscore.
+    assert ptd.clean_column_name("a/b") == "a_b"
+
+
+def test_clean_column_name_substitutes_domain_tokens():
+    # `clean_column_name` performs domain-specific rewrites: `%` becomes `perc`
+    # and the literal substring `compact` becomes `cmp`.
+    assert ptd.clean_column_name("% compaction") == "perc_cmpion"
+    # The hyphen is stripped before `\W+` collapse, so "CAAX-positive" loses
+    # the dash entirely rather than gaining an underscore.
+    assert ptd.clean_column_name("CAAX-positive") == "caaxpositive"
+
+
+def test_clean_column_name_handles_none():
+    assert ptd.clean_column_name(None) == ""
 
 
 # ---------------------------------------------------------------------------

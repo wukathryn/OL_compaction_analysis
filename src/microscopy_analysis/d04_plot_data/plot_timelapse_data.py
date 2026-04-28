@@ -16,10 +16,6 @@ import re
 import microscopy_analysis.d04_plot_data.plot_settings as ps
 
 
-def clean_column_name(name):
-    """Sanitize column name for use in filenames."""
-    return name.lower().replace(' ', '_').replace('/', '').replace('(', '').replace(')', '')
-
 def wrap_text(text, width=15):
     """Wrap text longer than specified width"""
     return '\n'.join(textwrap.wrap(text, width=width))

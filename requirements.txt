@@ -6,7 +6,7 @@ numpy==1.26.4
 scipy==1.15.2
 pandas==2.2.3
 statsmodels==0.14.4
-scikit-image==0.22.0
+scikit-image==0.26.0
 tifffile==2026.2.20
 pillow==11.1.0
 matplotlib==3.10.0

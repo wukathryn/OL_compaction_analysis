@@ -13,7 +13,6 @@ Phase-correlation reference: Evangelidis & Psarakis, IEEE TPAMI 30(10), 2008.
 
 from __future__ import annotations
 
-import argparse
 import shutil
 from pathlib import Path
 from typing import Optional, Tuple, Union

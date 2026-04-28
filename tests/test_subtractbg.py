@@ -22,10 +22,11 @@ def test_clip_upper_outliers_clips_extremes_only():
     img = np.ones((1, 1, 1, 1, 10), dtype=np.uint16)
     img[0, 0, 0, 0, 9] = 1000
 
-    # Clip at the 90th percentile (which is 1, since 9/10 values are 1).
-    out = sb.clip_upper_outliers(img, outlier_perc=90)
+    # `np.nanpercentile(..., method='higher')` for n=10 with q=80 picks the
+    # value at sorted index ceil(0.80 * 9) = 8 -> 1. Setting the threshold to
+    # 1 clips the outlier (1000) down to 1.
+    out = sb.clip_upper_outliers(img, outlier_perc=80)
 
-    # The outlier has been pulled down to the threshold; other values unchanged.
     assert out[0, 0, 0, 0, 9] == 1
     assert (out[0, 0, 0, 0, :9] == 1).all()
     assert out.dtype == img.dtype
@@ -118,6 +119,15 @@ def test_param_to_list_string_parsed_via_literal_eval():
     assert sb.param_to_list("[1, 2, 3]") == [1, 2, 3]
 
 
-def test_param_to_list_rejects_non_list_string():
+def test_param_to_list_rejects_unsupported_types():
+    # A dict is neither a string (so ast.literal_eval is skipped), nor a
+    # numeric scalar, nor a list, so the final assertion fires.
     with pytest.raises(AssertionError, match="number or a list of numbers"):
+        sb.param_to_list({"key": 1})
+
+
+def test_param_to_list_raises_on_non_literal_string():
+    # An unparseable string flows into ast.literal_eval, which raises
+    # ValueError (not AssertionError).
+    with pytest.raises(ValueError):
         sb.param_to_list("hello")

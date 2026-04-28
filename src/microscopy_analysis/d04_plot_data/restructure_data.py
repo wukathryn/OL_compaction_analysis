@@ -6,7 +6,6 @@ into the wide formats expected by trajectory plotting and the repeated-
 measures statistics in :mod:`run_stats`.
 """
 
-import re
 import pandas as pd
 
 
