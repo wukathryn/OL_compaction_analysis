@@ -99,3 +99,4 @@ notebooks/older/
 
 # JetBrains IDE
 .idea/
+*.egg-info/
